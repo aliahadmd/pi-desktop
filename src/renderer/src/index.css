@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+	background: #1a1a1e;
+	color: #e7e7ea;
+	font-family:
+		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+}
+
+/* Draggable title-bar region (hiddenInset traffic lights) */
+.titlebar-drag {
+	-webkit-app-region: drag;
+}
+.titlebar-nodrag {
+	-webkit-app-region: no-drag;
+}

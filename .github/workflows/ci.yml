@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          npm ci --ignore-scripts
+          npm install-scripts approve esbuild electron
+          node node_modules/esbuild/install.js
+          node node_modules/electron/install.js
+          npx electron-rebuild -f -w node-pty
+
+      - name: Secrets check
+        run: ./scripts/check-secrets.sh
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: E2E tests
+        run: npm run e2e
+        env:
+          # Real-pi integration tests run without provider auth (no prompting).
+          CI: "true"
+
+      - name: Sidecar tests
+        working-directory: sidecar
+        run: |
+          uv sync
+          uv run pytest -q
+          uv run mypy app/
+
+      - name: Dependency audit
+        run: |
+          npm audit --omit=dev
+          cd sidecar && uv run pip-audit --skip-editable
+
+  build:
+    runs-on: macos-14
+    needs: test
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          npm ci --ignore-scripts
+          npm install-scripts approve esbuild electron
+          node node_modules/esbuild/install.js
+          node node_modules/electron/install.js
+          npx electron-rebuild -f -w node-pty
+      - name: Build sidecar binary
+        working-directory: sidecar
+        run: |
+          uv sync
+          uv run pyinstaller --onefile --name pi-desktop-sidecar run.py \
+            --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import app.main --collect-submodules app
+      - name: Package app
+        run: npx electron-builder --mac --dir
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pi-Desktop-macos
+          path: release/mac-arm64/

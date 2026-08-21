@@ -1,0 +1,39 @@
+appId: dev.pi.desktop
+productName: Pi Desktop
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+# Native modules must live outside the asar archive:
+asarUnpack:
+  - node_modules/node-pty/**
+  - node_modules/better-sqlite3/**
+extraResources:
+  # Python sidecar binary (built by sidecar/build.sh — see RELEASE.md)
+  - from: sidecar/dist/pi-desktop-sidecar
+    to: sidecar/pi-desktop-sidecar
+publish:
+  provider: github
+  owner: earendil-works
+  repo: pi-desktop
+  releaseType: release
+mac:
+  category: public.app-category.developer-tools
+  hardenedRuntime: true # required for notarization (chapter 8)
+  darkModeSupport: true
+  identity: null # unsigned dev builds; real signing + notarization lands in chapter 8.
+                 # NOTE: Developer-ID-signed-but-unnotarized builds were observed being
+                 # removed by local security software on the build machine — do not
+                 # distribute anything signed but unnotarized.
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # icon: build/icon.icns  # add a real icon before first public release
+protocols:
+  - name: Pi Desktop OAuth
+    schemes:
+      - pidesktop
+npmRebuild: false

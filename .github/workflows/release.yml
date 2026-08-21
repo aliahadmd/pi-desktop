@@ -1,0 +1,85 @@
+name: Release
+
+# Tag-driven release: build → sign → notarize → publish draft GitHub release.
+# Requires repo secrets:
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID  (notarization)
+#   MAC_CERTS (base64 P12), MAC_CERTS_PASSWORD             (Developer ID Application)
+#   GH_TOKEN is provided automatically by actions/create-release usage below.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Import code-signing certificate
+        env:
+          MAC_CERTS: ${{ secrets.MAC_CERTS }}
+          MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+        run: |
+            echo "$MAC_CERTS" | base64 --decode > cert.p12
+            security create-keychain -p ci build.keychain
+            security default-keychain -s build.keychain
+            security unlock-keychain -p ci build.keychain
+            security import cert.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci build.keychain
+            rm cert.p12
+
+      - name: Install dependencies
+        run: |
+          npm ci --ignore-scripts
+          npm install-scripts approve esbuild electron
+          node node_modules/esbuild/install.js
+          node node_modules/electron/install.js
+          npx electron-rebuild -f -w node-pty
+
+      - name: Verify tests before release
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build sidecar binary
+        working-directory: sidecar
+        run: |
+          uv sync
+          uv run pyinstaller --onefile --name pi-desktop-sidecar run.py \
+            --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import app.main --collect-submodules app
+          codesign --force --options runtime \
+            --sign "$AC_SIGN_ID" dist/pi-desktop-sidecar || true
+
+      - name: Build, sign and notarize
+        run: npm run dist:mac:dmg -- --publish always
+        env:
+          # Notarization via @electron/notarize picks these up through electron-builder:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AC_SIGN_ID: "Developer ID Application"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: release/*.blockmap
+          if-no-files-found: ignore

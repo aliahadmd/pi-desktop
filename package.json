@@ -1,0 +1,61 @@
+{
+  "name": "pi-desktop",
+  "version": "0.1.0",
+  "description": "macOS Electron client for the Pi coding agent",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "lint": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "e2e": "vitest --run --config vitest.e2e.config.ts",
+    "dist:mac": "npm run build && electron-builder --mac --dir",
+    "dist:mac:dmg": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@tanstack/react-virtual": "3.14.10",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "ansi-to-react": "6.2.6",
+    "better-sqlite3": "13.0.3",
+    "electron-updater": "6.8.9",
+    "node-pty": "1.1.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "shiki": "4.4.3",
+    "typebox": "^1.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "4.2.0",
+    "@playwright/test": "^1.49.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^38.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "esbuild@0.21.5": true,
+    "electron@38.8.6": true
+  },
+  "overrides": {
+    "linkify-it": "^6.1.0"
+  }
+}

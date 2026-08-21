@@ -1,0 +1,265 @@
+/**
+ * Models page: provider auth management + model catalog.
+ */
+import { useCallback, useEffect, useState } from "react";
+import type { ModelCatalogEntry, ProviderAuthInfo } from "../../../shared/pi";
+
+export function ModelsPage({
+	onUseWithSession,
+}: {
+	onUseWithSession?(provider: string, modelId: string): void;
+}): React.JSX.Element {
+	const [providers, setProviders] = useState<ProviderAuthInfo[]>([]);
+	const [models, setModels] = useState<ModelCatalogEntry[]>([]);
+	const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+	const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+
+	const loadProviders = useCallback(async (): Promise<void> => {
+		const result = await window.piDesktop.invoke({ type: "auth.providers" });
+		if (result.ok) setProviders(result.data.providers);
+	}, []);
+
+	const loadModels = useCallback(async (provider: string | null): Promise<void> => {
+		const result = await window.piDesktop.invoke({
+			type: "auth.models",
+			...(provider !== null ? { provider } : {}),
+		});
+		if (result.ok) setModels(result.data.models);
+	}, []);
+
+	useEffect(() => {
+		void loadProviders();
+		void loadModels(null);
+	}, [loadProviders, loadModels]);
+
+	async function saveKey(providerId: string): Promise<void> {
+		const key = keyDraft[providerId];
+		if (key === undefined || key.trim().length === 0) return;
+		setBusy(true);
+		setError(null);
+		try {
+			const result = await window.piDesktop.invoke({
+				type: "auth.set_key",
+				providerId,
+				key: key.trim(),
+			});
+			if (!result.ok) {
+				setError(result.error.message);
+				return;
+			}
+			setKeyDraft((prev) => ({ ...prev, [providerId]: "" }));
+			setNotice(`API key saved for ${providerId}.`);
+			await loadProviders();
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function removeKey(providerId: string): Promise<void> {
+		setBusy(true);
+		try {
+			await window.piDesktop.invoke({ type: "auth.remove_key", providerId });
+			setNotice(`API key removed for ${providerId}.`);
+			await loadProviders();
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function login(providerId: string, authType: "api_key" | "oauth"): Promise<void> {
+		setBusy(true);
+		setError(null);
+		try {
+			const result = await window.piDesktop.invoke({
+				type: "auth.login",
+				providerId,
+				authType,
+			});
+			if (!result.ok) setError(result.error.message);
+			else setNotice(`Login flow finished for ${providerId}.`);
+			await loadProviders();
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function logout(providerId: string): Promise<void> {
+		setBusy(true);
+		try {
+			await window.piDesktop.invoke({ type: "auth.logout", providerId });
+			await loadProviders();
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	return (
+		<div className="flex h-full overflow-hidden">
+			{/* Providers */}
+			<div className="w-80 shrink-0 overflow-y-auto border-r border-neutral-800 p-3">
+				<h3 className="mb-2 px-1 text-xs font-semibold tracking-wide text-neutral-400 uppercase">
+					Providers
+				</h3>
+				{providers.map((p) => (
+					<button
+						key={p.id}
+						type="button"
+						onClick={() => setSelectedProvider(p.id)}
+						className={`mb-1 block w-full rounded px-3 py-2 text-left ${
+							selectedProvider === p.id ? "bg-neutral-800" : "hover:bg-neutral-900"
+						}`}
+					>
+						<div className="flex items-center gap-2">
+							<span
+								className={`h-1.5 w-1.5 rounded-full ${p.configured ? "bg-green-500" : "bg-neutral-600"}`}
+							/>
+							<span className="text-sm text-neutral-200">{p.name}</span>
+							<span className="ml-auto font-mono text-[9px] text-neutral-600">
+								{p.modelCount}
+							</span>
+						</div>
+						<div className="mt-0.5 text-[10px] text-neutral-500">
+							{p.configured
+								? `configured via ${p.source ?? p.authType}`
+								: "not configured"}
+						</div>
+					</button>
+				))}
+			</div>
+
+			{/* Detail */}
+			<div className="flex-1 overflow-y-auto p-4">
+				{error !== null && (
+					<div className="mb-3 rounded border border-red-900 bg-red-950/50 px-3 py-2 text-xs text-red-300">
+						{error}
+					</div>
+				)}
+				{notice !== null && (
+					<div className="mb-3 rounded border border-green-900 bg-green-950/50 px-3 py-2 text-xs text-green-300">
+						{notice}
+					</div>
+				)}
+
+				{selectedProvider === null ? (
+					<p className="text-sm text-neutral-600">Select a provider to manage auth.</p>
+				) : (
+					(() => {
+						const provider = providers.find((pr) => pr.id === selectedProvider);
+						if (provider === undefined) return null;
+						return (
+							<div>
+								<h2 className="text-base font-semibold text-neutral-100">{provider.name}</h2>
+								<p className="mt-0.5 font-mono text-[10px] text-neutral-500">
+									{provider.id} · {provider.configured ? provider.source ?? "configured" : "not configured"}
+								</p>
+
+								<div className="mt-4 flex flex-wrap items-center gap-2">
+									<input
+										type="password"
+										value={keyDraft[selectedProvider] ?? ""}
+										onChange={(e) =>
+											setKeyDraft((prev) => ({ ...prev, [selectedProvider]: e.target.value }))
+										}
+										placeholder={`${provider.name} API key…`}
+										className="w-72 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs outline-none focus:border-blue-500"
+									/>
+									<button
+										type="button"
+										disabled={busy || (keyDraft[selectedProvider]?.trim().length ?? 0) === 0}
+										onClick={() => void saveKey(selectedProvider)}
+										className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+									>
+										Save key
+									</button>
+									{provider.configured && provider.authType === "api_key" && (
+										<button
+											type="button"
+											disabled={busy}
+											onClick={() => void removeKey(selectedProvider)}
+											className="rounded bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+										>
+											Remove key
+										</button>
+									)}
+									{provider.authType === "oauth" || provider.usingOAuth ? (
+										<>
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() => void login(selectedProvider, "oauth")}
+												className="rounded bg-purple-700 px-3 py-1.5 text-xs text-white hover:bg-purple-600 disabled:opacity-40"
+											>
+												{provider.configured ? "Re-login (OAuth)" : "Login (OAuth)"}
+											</button>
+											{provider.configured && (
+												<button
+													type="button"
+													disabled={busy}
+													onClick={() => void logout(selectedProvider)}
+													className="rounded bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+												>
+													Logout
+												</button>
+											)}
+										</>
+									) : null}
+								</div>
+
+								<h3 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-neutral-400 uppercase">
+									Models ({models.filter((m) => m.provider === selectedProvider).length})
+								</h3>
+								<table className="w-full text-left text-xs">
+									<thead className="text-neutral-500">
+										<tr>
+											<th className="px-2 py-1">Model</th>
+											<th className="px-2 py-1">Context</th>
+											<th className="px-2 py-1">In $/Mtok</th>
+											<th className="px-2 py-1">Out $/Mtok</th>
+											<th className="px-2 py-1"></th>
+										</tr>
+									</thead>
+									<tbody>
+										{models
+											.filter((m) => m.provider === selectedProvider)
+											.map((m) => (
+												<tr key={m.id} className="border-t border-neutral-800/60">
+													<td className="px-2 py-1.5 text-neutral-200">
+														{m.name}
+														{m.reasoning && (
+															<span className="ml-1.5 text-[9px] text-purple-400">reasoning</span>
+														)}
+													</td>
+													<td className="px-2 py-1.5 font-mono text-[10px] text-neutral-400">
+														{(m.contextWindow / 1000).toFixed(0)}k
+													</td>
+													<td className="px-2 py-1.5 font-mono text-[10px] text-neutral-400">
+														{m.inputCostPerMtok !== null ? `$${m.inputCostPerMtok.toFixed(2)}` : "—"}
+													</td>
+													<td className="px-2 py-1.5 font-mono text-[10px] text-neutral-400">
+														{m.outputCostPerMtok !== null ? `$${m.outputCostPerMtok.toFixed(2)}` : "—"}
+													</td>
+													<td className="px-2 py-1.5">
+														<button
+															type="button"
+															onClick={() => onUseWithSession?.(m.provider, m.id)}
+															className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700"
+															title="Set as default model for new sessions"
+														>
+															Set default
+														</button>
+													</td>
+												</tr>
+											))}
+									</tbody>
+								</table>
+							</div>
+						);
+					})()
+				)}
+			</div>
+		</div>
+	);
+}

@@ -1,0 +1,192 @@
+"""Incremental indexer: pi session JSONL trees -> FTS5.
+
+Pi session files (v3) are JSONL where each line is an entry with
+{type, id, parentId, timestamp, message?}. We index the text of user and
+assistant messages plus tool results (truncated), keyed by (file_path,
+entry_id) so re-indexing a changed file is a delete+insert of its rows.
+"""
+import json
+import logging
+import sqlite3
+from pathlib import Path
+from typing import Any
+
+from app.db import connect
+
+log = logging.getLogger("sidecar.indexer")
+
+MAX_TEXT_CHARS = 10_000
+
+
+def _text_from_content(content: Any) -> str:
+    """Extract searchable text from pi content blocks (string or array)."""
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype in ("text", "thinking"):
+                text = block.get("text") or block.get("thinking")
+                if isinstance(text, str):
+                    parts.append(text)
+            elif btype == "toolCall":
+                name = block.get("name", "")
+                args = json.dumps(block.get("arguments", {}))
+                parts.append(f"[tool:{name} {args}]")
+    return "\n".join(parts)
+
+
+def parse_session_file(path: Path) -> list[dict[str, str]]:
+    """Parse one JSONL session file into FTS rows. Skips corrupt lines."""
+    rows: list[dict[str, str]] = []
+    session_id = ""
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            for line_no, line in enumerate(f):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    log.debug("skip corrupt line %s:%d", path, line_no)
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+
+                # Session header carries the id.
+                if entry.get("type") in ("session", "session_info") and not session_id:
+                    sid = entry.get("id")
+                    if isinstance(sid, str):
+                        session_id = sid
+
+                message = entry.get("message")
+                if not isinstance(message, dict):
+                    continue
+                role = message.get("role", "")
+                entry_id = entry.get("id")
+                if not isinstance(entry_id, str):
+                    continue
+                text = _text_from_content(message.get("content"))
+                if not text.strip():
+                    continue
+                rows.append(
+                    {
+                        "file_path": str(path),
+                        "session_id": session_id,
+                        "entry_id": entry_id,
+                        "role": str(role),
+                        "text": text[:MAX_TEXT_CHARS],
+                    }
+                )
+    except OSError as e:
+        log.warning("cannot read %s: %s", path, e)
+    return rows
+
+
+def index_file(conn: sqlite3.Connection, path: Path) -> int:
+    """(Re)index one file. Returns number of rows indexed."""
+    file_key = str(path)
+    conn.execute("DELETE FROM messages_fts WHERE file_path = ?", (file_key,))
+    rows = parse_session_file(path)
+    conn.executemany(
+        "INSERT INTO messages_fts (file_path, session_id, entry_id, role, text) "
+        "VALUES (:file_path, :session_id, :entry_id, :role, :text)",
+        rows,
+    )
+    stat = path.stat()
+    conn.execute(
+        "INSERT INTO index_state (file_path, mtime, size) VALUES (?, ?, ?) "
+        "ON CONFLICT(file_path) DO UPDATE SET mtime=excluded.mtime, size=excluded.size",
+        (file_key, stat.st_mtime, stat.st_size),
+    )
+    return len(rows)
+
+
+def remove_file(conn: sqlite3.Connection, file_key: str) -> None:
+    conn.execute("DELETE FROM messages_fts WHERE file_path = ?", (file_key,))
+    conn.execute("DELETE FROM index_state WHERE file_path = ?", (file_key,))
+
+
+def run_incremental(conn: sqlite3.Connection, sessions_root: Path) -> dict[str, int]:
+    """Walk sessions_root; index new/changed files; drop deleted ones."""
+    result = {"indexed_files": 0, "rows": 0, "removed": 0}
+    if not sessions_root.exists():
+        return result
+
+    current: set[str] = set()
+    for path in sorted(sessions_root.rglob("*.jsonl")):
+        file_key = str(path)
+        current.add(file_key)
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        row = conn.execute(
+            "SELECT mtime, size FROM index_state WHERE file_path = ?", (file_key,)
+        ).fetchone()
+        if row is not None and abs(row["mtime"] - stat.st_mtime) < 1e-6 and row["size"] == stat.st_size:
+            continue  # unchanged
+        result["rows"] += index_file(conn, path)
+        result["indexed_files"] += 1
+
+    for row in conn.execute("SELECT file_path FROM index_state").fetchall():
+        if row["file_path"] not in current:
+            remove_file(conn, row["file_path"])
+            result["removed"] += 1
+
+    conn.commit()
+    return result
+
+
+def sanitize_query(query: str) -> str:
+    """Quote each whitespace-separated term so FTS5 special chars
+    (hyphens, quotes, parens) are treated as literal text."""
+    terms = [t for t in query.split() if t]
+    return " ".join(f'"{t.replace(chr(34), "")}"' for t in terms)
+
+
+def search(
+    conn: sqlite3.Connection,
+    query: str,
+    limit: int = 50,
+    project: str | None = None,
+) -> list[dict[str, Any]]:
+    """FTS5 search with snippets. Optionally filter to a project cwd via join."""
+    query = sanitize_query(query)
+    if not query.strip('"'):
+        return []
+    sql = """
+        SELECT messages_fts.session_id AS session_id,
+               messages_fts.entry_id AS entry_id,
+               messages_fts.role AS role,
+               snippet(messages_fts, 4, '<mark>', '</mark>', '…', 24) AS snippet,
+               s.cwd AS cwd, s.name AS session_name
+        FROM messages_fts
+        LEFT JOIN sessions s ON s.id = messages_fts.session_id
+        WHERE messages_fts MATCH ?
+    """
+    params: list[Any] = [query]
+    if project:
+        sql += " AND s.cwd = ?"
+        params.append(project)
+    sql += " ORDER BY rank LIMIT ?"
+    params.append(limit)
+    try:
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    except sqlite3.OperationalError as e:
+        # Malformed FTS query syntax etc.
+        log.warning("search failed for %r: %s", query, e)
+        return []
+
+
+def indexed_count(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(DISTINCT file_path) AS n FROM index_state").fetchone()
+    return int(row["n"]) if row else 0
+
+
+# Re-export for app factory convenience.
+connect_db = connect
