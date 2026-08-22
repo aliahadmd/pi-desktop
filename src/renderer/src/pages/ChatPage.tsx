@@ -3,7 +3,7 @@
  * tree), terminal toggle, composer, status bar, dialogs.
  */
 import { useEffect, useState } from "react";
-import { playSound, type SoundEvent } from "../services/sound";
+import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
 import type { PiImageInput } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
@@ -52,11 +52,7 @@ export default function ChatPage(): React.JSX.Element {
 	const [compacting, setCompacting] = useState(false);
 	const [insertedText, setInsertedText] = useState<string | null>(null);
 	const play = (event: SoundEvent): void => {
-		void window.piDesktop
-			.invoke({ type: "app.settings.get", key: "soundEnabled" })
-			.then((r) => {
-				if (r.ok && r.data !== false) playSound(event);
-			});
+		playSoundIfEnabled(event);
 	};
 
 	const [dockWidth, setDockWidth] = useState(320);
@@ -143,7 +139,6 @@ export default function ChatPage(): React.JSX.Element {
 					pushErrorNotice(activeId, `Prompt rejected: ${result.error.message}`);
 					play("error");
 				} else {
-					play("complete");
 					refreshState(activeId);
 				}
 			});

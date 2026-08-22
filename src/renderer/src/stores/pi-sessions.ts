@@ -25,6 +25,7 @@ import {
 	type Block,
 	type IngestContext,
 } from "../lib/ingest";
+import { playSoundIfEnabled } from "../services/sound";
 
 const MAX_BLOCKS = 2000;
 
@@ -98,7 +99,15 @@ export const useSessions = create<PiSessionsState>((set, get) => {
 					b.kind === "assistant" ? { ...b, parts: [...b.parts] } : { ...b }
 				),
 			};
-			for (const event of events) applyEvent(ctxCopy, event);
+			for (const event of events) {
+				const wasIdle = ctxCopy.phase === "idle";
+				applyEvent(ctxCopy, event);
+				// Play the completion sound only when a run actually settles —
+				// not on hydration or a stray settle arriving while already idle.
+				if (event.type === "agent_settled" && !wasIdle) {
+					playSoundIfEnabled("complete");
+				}
+			}
 			if (ctxCopy.blocks.length > MAX_BLOCKS) {
 				const trimmed = ctxCopy.blocks.length - MAX_BLOCKS;
 				ctxCopy.blocks = ctxCopy.blocks.slice(-MAX_BLOCKS);

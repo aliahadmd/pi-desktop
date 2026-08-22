@@ -58,3 +58,12 @@ export function playSound(event: SoundEvent, volume: number = 0.3): void {
 			break;
 	}
 }
+
+/** Play a sound unless the user disabled sound effects in settings. */
+export function playSoundIfEnabled(event: SoundEvent): void {
+	void window.piDesktop
+		.invoke({ type: "app.settings.get", key: "soundEnabled" })
+		.then((r) => {
+			if (r.ok && r.data !== false) playSound(event);
+		});
+}
