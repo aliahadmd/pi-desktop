@@ -5,6 +5,8 @@
  * H-2/L-2 (sidecar rebuild channel registered), M-2 contract (bash requestId).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
 	applyEvent,
 	createContext,
@@ -13,7 +15,11 @@ import {
 	type UserBlock,
 } from "../../src/renderer/src/lib/ingest";
 import { useSessions } from "../../src/renderer/src/stores/pi-sessions";
-import { requestSchemaMap } from "../../src/shared/protocol";
+import { requestSchemaMap, type IpcEvent } from "../../src/shared/protocol";
+import { IpcRouter } from "../../src/main/ipc/router";
+import { PiService } from "../../src/main/pi/service";
+import type { IPiBackend } from "../../src/main/pi/backend";
+import type { RendererEventBus } from "../../src/main/ipc/events";
 
 const SESSION = "test-session";
 
@@ -164,5 +170,59 @@ describe("regression: user block survives streaming updates", () => {
 		const user = after.find((b): b is UserBlock => b.kind === "user");
 		expect(user?.text).toBe("my prompt");
 		expect(before).toBeGreaterThan(0);
+	});
+});
+
+describe("regression: failed bash reports success", () => {
+	it("failed bash emits tool_execution_end with isError true", async () => {
+		const emitted: IpcEvent[] = [];
+		const fakeBus = {
+			send: (event: IpcEvent) => {
+				emitted.push(event);
+			},
+		} as unknown as RendererEventBus;
+
+		const stubBackend = {
+			bash: async () => {
+				throw new Error("command failed");
+			},
+		} as unknown as IPiBackend;
+
+		const service = new PiService(fakeBus);
+		(
+			service as unknown as {
+				sessions: Map<string, { id: string; cwd: string; backend: IPiBackend }>;
+			}
+		).sessions.set("s1", { id: "s1", cwd: "/tmp", backend: stubBackend });
+
+		const router = new IpcRouter();
+		service.registerHandlers(router);
+		await router.dispatch({
+			type: "session.bash",
+			sessionId: "s1",
+			command: "false",
+			requestId: "r1",
+		});
+
+		const bashEnd = emitted.find(
+			(e): e is Extract<IpcEvent, { type: "pi_event" }> =>
+				e.type === "pi_event" && e.event.type === "tool_execution_end"
+		);
+		expect(bashEnd).toBeDefined();
+		if (bashEnd !== undefined && bashEnd.event.type === "tool_execution_end") {
+			expect(bashEnd.event.isError).toBe(true);
+		}
+	});
+});
+
+describe("regression: only one compact dialog is rendered", () => {
+	it("data-testid=\"compact-confirm\" occurs exactly once in ChatPage.tsx", () => {
+		const filePath = path.join(
+			import.meta.dirname,
+			"../../src/renderer/src/pages/ChatPage.tsx"
+		);
+		const source = fs.readFileSync(filePath, "utf8");
+		const matches = source.match(/data-testid="compact-confirm"/g) ?? [];
+		expect(matches).toHaveLength(1);
 	});
 });

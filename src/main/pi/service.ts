@@ -147,33 +147,26 @@ export class PiService {
 			return { path: exported };
 		});
 		router.handle("session.bash", async (req) => {
+			let isError = false;
 			try {
 				return await this.backend(req.sessionId).bash(req.command, {
 					...(req.excludeFromContext === true ? { excludeFromContext: true } : {}),
 					...(req.requestId !== undefined ? { requestId: req.requestId } : {}),
 				});
+			} catch (error) {
+				isError = true;
+				throw error;
 			} finally {
 				// Complete the streaming bash block in the transcript.
-				this.bus.send({
-					type: "pi_event",
-					sessionId: req.sessionId,
-					event: {
-						type: "tool_execution_end",
-						toolCallId: req.requestId,
-						toolName: "bash",
-						isError: false,
-					},
-				});
+				const event: PiEvent = {
+					type: "tool_execution_end",
+					toolCallId: req.requestId,
+					toolName: "bash",
+					isError,
+				};
+				this.bus.send({ type: "pi_event", sessionId: req.sessionId, event });
 				for (const hooks of this.hooksList) {
-					hooks.onSessionEvent?.(
-						req.sessionId,
-						{
-							type: "tool_execution_end",
-							toolCallId: req.requestId,
-							toolName: "bash",
-							isError: false,
-						}
-					);
+					hooks.onSessionEvent?.(req.sessionId, event);
 				}
 			}
 		});
