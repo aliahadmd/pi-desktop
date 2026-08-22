@@ -114,6 +114,8 @@ export interface IngestContext {
 	phase: "idle" | "streaming" | "compacting" | "retrying";
 	retryNoticeId: string | null;
 	seq: number;
+	/** Phase to restore when compaction ends (compaction can start from idle). */
+	phaseBeforeCompaction: IngestContext["phase"] | null;
 }
 
 export function createContext(): IngestContext {
@@ -123,6 +125,7 @@ export function createContext(): IngestContext {
 		phase: "idle",
 		retryNoticeId: null,
 		seq: 0,
+		phaseBeforeCompaction: null,
 	};
 }
 
@@ -369,6 +372,7 @@ export function applyEvent(ctx: IngestContext, event: PiEvent): void {
 			break;
 
 		case "compaction_start":
+			ctx.phaseBeforeCompaction = ctx.phase;
 			ctx.phase = "compacting";
 			ctx.blocks.push({
 				kind: "notice",
@@ -379,7 +383,8 @@ export function applyEvent(ctx: IngestContext, event: PiEvent): void {
 			break;
 
 		case "compaction_end": {
-			ctx.phase = "streaming";
+			ctx.phase = ctx.phaseBeforeCompaction ?? "streaming";
+			ctx.phaseBeforeCompaction = null;
 			const ok = !event.aborted && event.errorMessage === undefined;
 			ctx.blocks.push({
 				kind: "notice",

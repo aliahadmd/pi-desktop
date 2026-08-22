@@ -136,6 +136,27 @@ describe("transcript ingestion", () => {
 		).toBe(true);
 	});
 
+	it("manual compaction from idle returns to idle", () => {
+		const ctx = createContext();
+		feed(ctx, [{ type: "compaction_start", reason: "manual" }]);
+		expect(ctx.phase).toBe("compacting");
+		feed(ctx, [
+			{ type: "compaction_end", reason: "manual", aborted: false, willRetry: false },
+		]);
+		expect(ctx.phase).toBe("idle");
+	});
+
+	it("threshold compaction mid-run returns to streaming", () => {
+		const ctx = createContext();
+		feed(ctx, [{ type: "agent_start" }]);
+		expect(ctx.phase).toBe("streaming");
+		feed(ctx, [{ type: "compaction_start", reason: "threshold" }]);
+		feed(ctx, [
+			{ type: "compaction_end", reason: "threshold", aborted: false, willRetry: false },
+		]);
+		expect(ctx.phase).toBe("streaming");
+	});
+
 	it("hydrates blocks from getMessages output", () => {
 		const blocks = hydrate([
 			{ role: "user", content: "fix the bug" },
