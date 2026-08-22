@@ -24,6 +24,7 @@ import { SidecarManager, type SearchHit } from "./sidecar/manager";
 import { StoreService } from "./store/service";
 import { FileBridge } from "./fs-bridge";
 import * as gitService from "./git-service";
+import { approveExtension } from "./pi/approve-extension";
 import { createDesktopTools } from "./pi/desktop-tools";
 import { PtyService } from "./pty-service";
 import { createLogger, type Logger } from "./services/logging";
@@ -123,6 +124,13 @@ app.whenReady()
 				showItemInFolder: (p) => void shellMod.showItemInFolder(p),
 			})
 		);
+		const confirmBeforeApply = storeService.getSettingRaw("confirmBeforeApply") !== false;
+		piService.setExtensionFactories(
+			confirmBeforeApply
+				? [{ name: "pi-desktop-approve", factory: approveExtension }]
+				: []
+		);
+		logger.info("main", `approval gate ${confirmBeforeApply ? "enabled" : "disabled"}`);
 		router.handle("fs.list", async (req) => {
 			return { entries: await bridge.list(req.dirPath) };
 		});

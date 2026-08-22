@@ -5,6 +5,8 @@
  * H-2/L-2 (sidecar rebuild channel registered), M-2 contract (bash requestId).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
 	applyEvent,
 	createContext,
@@ -14,6 +16,8 @@ import {
 } from "../../src/renderer/src/lib/ingest";
 import { useSessions } from "../../src/renderer/src/stores/pi-sessions";
 import { requestSchemaMap } from "../../src/shared/protocol";
+
+const ROOT = path.resolve(import.meta.dirname, "../..");
 
 const SESSION = "test-session";
 
@@ -164,5 +168,37 @@ describe("regression: user block survives streaming updates", () => {
 		const user = after.find((b): b is UserBlock => b.kind === "user");
 		expect(user?.text).toBe("my prompt");
 		expect(before).toBeGreaterThan(0);
+	});
+});
+
+describe("regression: approval extension is wired into PiService", () => {
+	it("main/index.ts loads the desktop approval extension", () => {
+		const source = readFileSync(path.join(ROOT, "src/main/index.ts"), "utf8");
+		expect(source).toContain("setExtensionFactories");
+		expect(source).toContain("pi-desktop-approve");
+	});
+});
+
+describe("regression: no dead extensionPaths plumbing remains", () => {
+	it("extensionPaths does not appear in backend.ts, service.ts, or index.ts", () => {
+		for (const file of ["src/main/pi/backend.ts", "src/main/pi/service.ts", "src/main/index.ts"]) {
+			const source = readFileSync(path.join(ROOT, file), "utf8");
+			expect(source).not.toContain("extensionPaths");
+		}
+	});
+});
+
+describe("regression: approval gate defaults to enabled", () => {
+	it("an unset confirmBeforeApply setting means the gate is on", () => {
+		const source = readFileSync(path.join(ROOT, "src/main/index.ts"), "utf8");
+		expect(source).toContain('getSettingRaw("confirmBeforeApply") !== false');
+	});
+});
+
+describe("regression: sdk backend forwards extension factories to pi", () => {
+	it("sdk-backend.ts passes extensionFactories through resourceLoaderOptions", () => {
+		const source = readFileSync(path.join(ROOT, "src/main/pi/sdk-backend.ts"), "utf8");
+		expect(source).toContain("resourceLoaderOptions");
+		expect(source).toContain("extensionFactories");
 	});
 });
