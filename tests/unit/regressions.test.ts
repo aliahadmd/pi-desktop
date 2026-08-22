@@ -7,6 +7,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { requestSchemaMap, type IpcEvent } from "../../src/shared/protocol";
+import { IpcRouter } from "../../src/main/ipc/router";
+import { PiService } from "../../src/main/pi/service";
+import type { IPiBackend } from "../../src/main/pi/backend";
+import type { RendererEventBus } from "../../src/main/ipc/events";
+import { readFileSync } from "node:fs";
 import {
 	applyEvent,
 	createContext,
@@ -15,11 +21,6 @@ import {
 	type UserBlock,
 } from "../../src/renderer/src/lib/ingest";
 import { useSessions } from "../../src/renderer/src/stores/pi-sessions";
-import { requestSchemaMap, type IpcEvent } from "../../src/shared/protocol";
-import { IpcRouter } from "../../src/main/ipc/router";
-import { PiService } from "../../src/main/pi/service";
-import type { IPiBackend } from "../../src/main/pi/backend";
-import type { RendererEventBus } from "../../src/main/ipc/events";
 
 const SESSION = "test-session";
 
@@ -224,5 +225,45 @@ describe("regression: only one compact dialog is rendered", () => {
 		const source = fs.readFileSync(filePath, "utf8");
 		const matches = source.match(/data-testid="compact-confirm"/g) ?? [];
 		expect(matches).toHaveLength(1);
+	});
+});
+
+describe("regression: escaped absolute positioning (plan 003)", () => {
+	it("rail drag strip has a positioned ancestor", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/shell/Sidebar.tsx",
+			"utf8",
+		);
+		expect(source).toContain("relative flex h-full flex-col items-center");
+	});
+
+	it("expanded sidebar is positioned for its context menu", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/shell/Sidebar.tsx",
+			"utf8",
+		);
+		expect(source).toContain("relative flex h-full flex-col border-r");
+	});
+
+	it("composer wrapper is positioned for the drop overlay", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/chat/Composer.tsx",
+			"utf8",
+		);
+		expect(source).toContain('className="relative px-3 pb-3"');
+	});
+
+	it("review badge no longer uses margin-hack positioning", () => {
+		const source = readFileSync("src/renderer/src/pages/ChatPage.tsx", "utf8");
+		expect(source).not.toContain("absolute ml-4 -mt-3");
+	});
+
+	it("sheet is viewport-fixed, not ancestor-dependent", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/shell/Sheet.tsx",
+			"utf8",
+		);
+		expect(source).toContain("fixed inset-0 z-40");
+		expect(source).not.toContain("absolute inset-0 z-40");
 	});
 });

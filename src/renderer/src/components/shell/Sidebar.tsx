@@ -140,7 +140,7 @@ export function Sidebar({
 	if (collapsed) {
 		return (
 			<div
-				className="flex h-full flex-col items-center gap-2 border-r border-neutral-800 bg-neutral-950/60 pt-10"
+				className="relative flex h-full flex-col items-center gap-2 border-r border-neutral-800 bg-neutral-950/60 pt-10"
 				style={{ width: "var(--sidebar-rail-w)" }}
 			>
 				<div className="titlebar-drag absolute left-0 top-0 h-10 w-full" />
@@ -174,7 +174,7 @@ export function Sidebar({
 
 	return (
 		<div
-			className="flex h-full flex-col border-r border-neutral-800 bg-neutral-950/60"
+			className="relative flex h-full flex-col border-r border-neutral-800 bg-neutral-950/60"
 			style={{ width: "var(--sidebar-w)" }}
 			data-testid="sidebar"
 		>

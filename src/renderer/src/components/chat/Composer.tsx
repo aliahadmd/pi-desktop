@@ -167,7 +167,7 @@ export function Composer({
 
 	return (
 		<div
-			className="px-3 pb-3"
+			className="relative px-3 pb-3"
 			onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
 			onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
 			onDrop={(e) => {
