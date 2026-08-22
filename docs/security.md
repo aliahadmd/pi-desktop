@@ -53,6 +53,12 @@ The Python sidecar binds to `127.0.0.1` only and requires a per-boot token.
 
 ## Known limitations (v1)
 
+- The confirm-before-apply approval gate (bash/edit/write) is loaded as an
+  in-process extension factory and only covers **SDK-mode sessions**. It is
+  on by default and user-disableable in Settings. **RPC-mode sessions are not
+  gated** — an inline function cannot cross the `pi --mode rpc` subprocess
+  boundary, so a session reopened in RPC (isolation) mode runs without
+  confirmation.
 - Embedded terminal grants a real shell inside the project root scoping check;
   a user typing in it has full shell permissions by definition.
 - Symlinked directories *within* a project that point outside are rejected on

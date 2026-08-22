@@ -43,7 +43,7 @@ export class PiService {
 	private readonly bus: RendererEventBus;
 	private readonly hooksList: PiServiceHooks[] = [];
 	private sharedRuntime: unknown = undefined;
-	private extensionPaths: string[] = [];
+	private extensionFactories: unknown[] = [];
 	private scopedModels: Array<{ provider: string; modelId: string; thinkingLevel?: string }> = [];
 	private desktopTools: unknown[] = [];
 
@@ -67,9 +67,9 @@ export class PiService {
 		this.sharedRuntime = runtime;
 	}
 
-	/** Extension files loaded into every SDK session (e.g. approval gate). */
-	setExtensionPaths(paths: string[]): void {
-		this.extensionPaths = paths;
+	/** Desktop-owned extensions injected into every SDK session. */
+	setExtensionFactories(factories: unknown[]): void {
+		this.extensionFactories = factories;
 	}
 
 	setScopedModels(models: Array<{ provider: string; modelId: string; thinkingLevel?: string }>): void {
@@ -302,7 +302,9 @@ export class PiService {
 			...(opts.name !== undefined ? { name: opts.name } : {}),
 			...(opts.noSession === true ? { noSession: true } : {}),
 			...(this.sharedRuntime !== undefined ? { modelRuntime: this.sharedRuntime } : {}),
-			...(this.extensionPaths.length > 0 ? { extensionPaths: this.extensionPaths } : {}),
+			...(this.extensionFactories.length > 0
+				? { extensionFactories: this.extensionFactories }
+				: {}),
 			...(this.scopedModels.length > 0 ? { scopedModels: this.scopedModels } : {}),
 			...(this.desktopTools.length > 0 ? { desktopTools: this.desktopTools } : {}),
 			onEvent: (event) => {
