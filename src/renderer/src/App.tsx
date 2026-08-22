@@ -11,13 +11,14 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TrustPanel } from "./pages/TrustPanel";
 import { SessionsPage } from "./pages/SessionsPage";
 import { Onboarding } from "./pages/Onboarding";
+import { PackageMarketplace } from "./pages/PackageMarketplace";
 import { Sheet } from "./components/shell/Sheet";
 import { Sidebar } from "./components/shell/Sidebar";
 
-type SheetKind = "models" | "settings" | "trust" | "browse" | null;
+type SheetKind = "models" | "settings" | "trust" | "browse" | "packages" | null;
 
 export default function App(): React.JSX.Element {
-	const [pingOk, setPingOk] = useState(false);
+
 	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [onboardingChecked, setOnboardingChecked] = useState(false);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -26,9 +27,6 @@ export default function App(): React.JSX.Element {
 	useEffect(() => bindPiEvents(), []);
 
 	useEffect(() => {
-		void window.piDesktop.invoke({ type: "ping" }).then((r) => {
-			if (r.ok) setPingOk(true);
-		});
 		void window.piDesktop.invoke({ type: "auth.providers" }).then((r) => {
 			setOnboardingChecked(true);
 			if (!r.ok) return;
@@ -99,11 +97,7 @@ export default function App(): React.JSX.Element {
 
 				<ChatPage />
 
-				{pingOk && (
-					<span className="pointer-events-none absolute right-2 top-0 font-mono text-[9px] text-neutral-700">
-						ipc ok
-					</span>
-				)}
+
 			</main>
 
 			{/* Sheets */}
@@ -139,6 +133,14 @@ export default function App(): React.JSX.Element {
 				testId="sheet-trust"
 			>
 				<TrustPanel />
+			</Sheet>
+			<Sheet
+				open={sheet === "packages"}
+				title="Package Marketplace"
+				onClose={() => setSheet(null)}
+				testId="sheet-packages"
+			>
+				<PackageMarketplace />
 			</Sheet>
 			<Sheet
 				open={sheet === "browse"}

@@ -146,6 +146,13 @@ export function SettingsPage(): React.JSX.Element {
 				</div>
 
 				<div className="mt-8 border-t border-neutral-800 pt-5">
+					<div className="mb-2 text-sm text-neutral-200">Sound</div>
+					<SettingRow label="Sound effects" hint="Task completion, errors, notifications">
+						<SoundToggle />
+					</SettingRow>
+				</div>
+
+				<div className="mt-8 border-t border-neutral-800 pt-5">
 					<PackagesPanel />
 				</div>
 
@@ -195,6 +202,41 @@ function Toggle({
 			<span
 				className={`block h-4 w-4 rounded-full bg-white transition ${
 					checked ? "translate-x-4.5 ml-4" : "ml-0.5"
+				}`}
+			/>
+		</button>
+	);
+}
+
+
+function SoundToggle(): React.JSX.Element {
+	const [enabled, setEnabled] = useState(true);
+
+	useEffect(() => {
+		void window.piDesktop
+			.invoke({ type: "app.settings.get", key: "soundEnabled" })
+			.then((r) => {
+				if (r.ok && r.data !== null) setEnabled(r.data === true);
+			});
+	}, []);
+
+	return (
+		<button
+			type="button"
+			onClick={() => {
+				const next = !enabled;
+				setEnabled(next);
+				void window.piDesktop.invoke({
+					type: "app.settings.set",
+					key: "soundEnabled",
+					value: JSON.stringify(next),
+				});
+			}}
+			className={`h-5 w-9 rounded-full transition ${enabled ? "bg-blue-600" : "bg-neutral-700"}`}
+		>
+			<span
+				className={`block h-4 w-4 rounded-full bg-white transition ${
+					enabled ? "ml-[18px]" : "ml-0.5"
 				}`}
 			/>
 		</button>

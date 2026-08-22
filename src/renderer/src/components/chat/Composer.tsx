@@ -5,6 +5,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PiImageInput } from "../../../../shared/pi";
 
+interface Attachment {
+	id: string;
+	name: string;
+	size: number;
+	kind: "image" | "text" | "path-ref";
+	imageData?: string;
+	mimeType?: string;
+	textContent?: string;
+}
+
 export function Composer({
 	streaming,
 	queueCount,
@@ -15,6 +25,7 @@ export function Composer({
 	onAbort,
 	onOpenPalette,
 	projectRoot,
+	modelName,
 }: {
 	streaming: boolean;
 	queueCount: number;
@@ -25,10 +36,14 @@ export function Composer({
 	onAbort(): void;
 	onOpenPalette(): void;
 	projectRoot: string | null;
+	modelName?: string | undefined;
+	permissionMode?: "full" | "confirm" | "readonly";
+	onPermissionModeChange?(mode: "full" | "confirm" | "readonly"): void;
 }): React.JSX.Element {
 	const [text, setText] = useState("");
-	const [images, setImages] = useState<PiImageInput[]>([]);
+	const [attachments, setAttachments] = useState<Attachment[]>([]);
 	const [followUpMode, setFollowUpMode] = useState(false);
+	const [dragging, setDragging] = useState(false);
 	const [git, setGit] = useState<{
 		repo: boolean;
 		branch: string | null;
@@ -88,22 +103,37 @@ export function Composer({
 		}
 	}, [insertText, onInsertHandled]);
 
-	async function filesToImages(files: FileList): Promise<PiImageInput[]> {
-		const out: PiImageInput[] = [];
-		for (const file of Array.from(files)) {
-			if (!file.type.startsWith("image/")) continue;
+	const TEXT_EXTENSIONS = new Set(["ts","js","py","md","json","txt","css","html","yaml","yml","toml","sh","rs","go","java","rb","sql","xml","csv"]);
+
+	async function fileToAttachment(file: File): Promise<Attachment> {
+		const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+		if (file.type.startsWith("image/")) {
 			const buffer = await file.arrayBuffer();
 			let binary = "";
 			const bytes = new Uint8Array(buffer);
 			for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i] ?? 0);
-			out.push({ data: btoa(binary), mimeType: file.type });
+			return { id, name: file.name, size: file.size, kind: "image", imageData: btoa(binary), mimeType: file.type };
+		}
+		const ext = file.name.split(".").pop() ?? "";
+		if (TEXT_EXTENSIONS.has(ext) && file.size <= 100_000) {
+			const textContent = await file.text();
+			return { id, name: file.name, size: file.size, kind: "text", textContent };
+		}
+		// Large or unknown type → path reference
+		return { id, name: file.name, size: file.size, kind: "path-ref" };
+	}
+
+	async function filesToAttachments(files: FileList): Promise<Attachment[]> {
+		const out: Attachment[] = [];
+		for (const file of Array.from(files)) {
+			out.push(await fileToAttachment(file));
 		}
 		return out;
 	}
 
 	function submit(): void {
 		const trimmed = text.trim();
-		if (trimmed.length === 0 && images.length === 0) return;
+		if (trimmed.length === 0 && attachments.length === 0) return;
 		if (trimmed.startsWith("!!")) {
 			onBash(trimmed.slice(2).trim(), true);
 			setText("");
@@ -114,14 +144,45 @@ export function Composer({
 			setText("");
 			return;
 		}
+		// Convert attachments to images + inline text for pi
+		const imgs: PiImageInput[] = [];
+		let extraContext = "";
+		for (const att of attachments) {
+			if (att.kind === "image" && att.imageData && att.mimeType) {
+				imgs.push({ data: att.imageData, mimeType: att.mimeType });
+			} else if (att.kind === "text" && att.textContent) {
+				extraContext += `\n\nFile: ${att.name}\n\`\`\`\n${att.textContent.slice(0, 10_000)}\n\`\`\``;
+			} else if (att.kind === "path-ref") {
+				extraContext += `\n\nSee file: ${att.name}`;
+			}
+		}
+		const fullText = extraContext.length > 0 ? trimmed + "\n" + extraContext : trimmed;
 		const behavior = streaming ? (followUpMode ? "followUp" : "steer") : undefined;
-		onSend(trimmed, images, behavior);
+		onSend(fullText, imgs, behavior);
 		setText("");
-		setImages([]);
+		setAttachments([]);
 	}
 
 	return (
-		<div className="px-3 pb-3">
+		<div
+			className="px-3 pb-3"
+			onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+			onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+			onDrop={(e) => {
+				e.preventDefault();
+				setDragging(false);
+				if (e.dataTransfer.files.length > 0) {
+					void filesToAttachments(e.dataTransfer.files).then((atts) =>
+						setAttachments((prev) => [...prev, ...atts])
+					);
+				}
+			}}
+		>
+			{dragging && (
+				<div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-500 bg-blue-950/30 text-sm text-blue-300">
+					Drop files here…
+				</div>
+			)}
 			{/* Git context strip */}
 			{git !== null && git.repo && (
 				<div
@@ -167,8 +228,8 @@ export function Composer({
 						const files = e.clipboardData.files;
 						if (files.length > 0) {
 							e.preventDefault();
-							void filesToImages(files).then((imgs) =>
-								setImages((prev) => [...prev, ...imgs])
+							void filesToAttachments(files).then((atts) =>
+								setAttachments((prev) => [...prev, ...atts])
 							);
 						}
 					}}
@@ -183,18 +244,27 @@ export function Composer({
 					className="max-h-[200px] w-full resize-none bg-transparent px-4 pt-3 text-sm outline-none placeholder:text-neutral-600"
 				/>
 
-				{images.length > 0 && (
-					<div className="flex gap-2 px-4 pb-1">
-						{images.map((img, i) => (
-							<button
-								key={i}
-								type="button"
-								onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-								className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-400 hover:bg-red-950 hover:text-red-300"
-								title="Remove"
+				{attachments.length > 0 && (
+					<div className="flex flex-wrap gap-1.5 px-4 pb-1">
+						{attachments.map((att) => (
+							<span
+								key={att.id}
+								className="group relative inline-flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1"
 							>
-								image {i + 1} ({img.mimeType}) ×
-							</button>
+								{att.kind === "image" && att.imageData && (
+									<img src={`data:${att.mimeType};base64,${att.imageData}`} alt={att.name} className="h-8 w-8 rounded object-cover" />
+								)}
+								{att.kind !== "image" && <span className="text-[10px]">📄</span>}
+								<span className="max-w-[140px] truncate text-[10px] text-neutral-300">{att.name}</span>
+								<button
+									type="button"
+									onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+									className="ml-0.5 text-neutral-500 hover:text-red-400"
+									title="Remove attachment"
+								>
+									×
+								</button>
+							</span>
 						))}
 					</div>
 				)}
@@ -237,15 +307,18 @@ export function Composer({
 						</>
 					) : (
 						<>
-							<span className="text-[10px] text-neutral-600">
-								Type / for commands · ! for bash
-							</span>
+							{modelName !== undefined && (
+								<span className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-[9px] text-neutral-400">
+									{modelName}
+								</span>
+			)}
+							<span className="text-[10px] text-neutral-600">Type / for commands · ! bash</span>
 							<button
 								type="button"
 								data-testid="send-button"
-								disabled={text.trim().length === 0 && images.length === 0}
+								disabled={text.trim().length === 0 && attachments.length === 0}
 								onClick={submit}
-								className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40"
+								className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white transition-all hover:bg-blue-500 active:scale-95 disabled:opacity-40"
 								title="Send"
 							>
 								↑

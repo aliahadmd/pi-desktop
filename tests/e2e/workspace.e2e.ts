@@ -89,7 +89,7 @@ describe("workspace UI", () => {
 		await page.getByText("RPC", { exact: true }).first().click();
 		await page.getByTestId("transcript").waitFor({ timeout: 30_000 });
 
-		await page.getByText("Files", { exact: true }).first().click();
+		await page.getByTestId("rail-files").click();
 		// Explorer header shows the session cwd once registered as a root.
 		await page.getByText(os.tmpdir()).first().waitFor({ timeout: 10_000 });
 

@@ -1,7 +1,7 @@
 /**
  * Virtualized transcript with stick-to-bottom streaming and tool grouping.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { groupToolRuns, type Block } from "../../lib/ingest";
 import { BlockView } from "./Blocks";
@@ -15,7 +15,7 @@ export function Transcript({
 }): React.JSX.Element {
 	const parentRef = useRef<HTMLDivElement>(null);
 	const stickToBottom = useRef(true);
-	const blocks = groupToolRuns(rawBlocks);
+	const blocks = useMemo(() => groupToolRuns(rawBlocks), [rawBlocks]);
 	const noopToolClick = (toolCallId: string): void => {
 		void toolCallId;
 	};

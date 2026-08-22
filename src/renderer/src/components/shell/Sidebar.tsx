@@ -33,7 +33,7 @@ export function Sidebar({
 }: {
 	collapsed: boolean;
 	onOpenSession(response: import("../../../../shared/pi").SessionOpenedResponse): void;
-	onOpenSheet(sheet: "models" | "settings" | "trust" | "browse"): void;
+	onOpenSheet(sheet: "models" | "settings" | "trust" | "browse" | "packages"): void;
 }): React.JSX.Element {
 	const [sessions, setSessions] = useState<SidebarSession[]>([]);
 	const [filter, setFilter] = useState("");
@@ -50,10 +50,17 @@ export function Sidebar({
 	}, []);
 
 	useEffect(() => {
+		void window.piDesktop.invoke({ type: "packages.list" }).then((r) => {
+			if (r.ok) setInstalledCount(r.data.packages.length);
+		});
+	}, []);
+
+	useEffect(() => {
 		void load();
+		if (collapsed) return; // rail mode: no DB polling needed
 		const timer = setInterval(() => void load(), 10_000);
 		return () => clearInterval(timer);
-	}, [filter, load]);
+	}, [filter, load, collapsed]);
 
 	// Group by cwd
 	const groups = useMemo(() => {
@@ -78,11 +85,22 @@ export function Sidebar({
 			useSessions.getState().setActive(s.id);
 			return;
 		}
-		const result = await window.piDesktop.invoke({
-			type: "session.resume",
-			sessionPath: s.filePath,
-		});
-		if (result.ok) onOpenSession(result.data as never);
+		// Deduplicate rapid double-clicks (T19.4)
+		if (resuming.has(s.id)) return;
+		setResuming((prev) => new Set(prev).add(s.id));
+		try {
+			const result = await window.piDesktop.invoke({
+				type: "session.resume",
+				sessionPath: s.filePath,
+			});
+			if (result.ok) onOpenSession(result.data as never);
+		} finally {
+			setResuming((prev) => {
+				const next = new Set(prev);
+				next.delete(s.id);
+				return next;
+			});
+		}
 	}
 
 	function statusDot(id: string): "dead" | "streaming" | "idle" | null {
@@ -94,6 +112,8 @@ export function Sidebar({
 
 	const sessionList = sessions;
 	const [createError, setCreateError] = useState<string | null>(null);
+	const [installedCount, setInstalledCount] = useState(0);
+	const [resuming, setResuming] = useState<Set<string>>(new Set());
 
 	async function create(backend: "sdk" | "rpc"): Promise<void> {
 		setCreateError(null);
@@ -189,6 +209,31 @@ export function Sidebar({
 					{createError}
 				</p>
 			)}
+
+			{/* Packages section */}
+			<div className="px-1.5 pb-1">
+				<button
+					type="button"
+					data-testid="sidebar-packages"
+					onClick={() => onOpenSheet("packages")}
+					className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-standard ${
+						false ? "bg-neutral-800 text-neutral-100" : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+					}`}
+				>
+					<span className="text-sm">📦</span>
+					<span>Packages</span>
+					{installedCount > 0 && (
+						<span className="ml-auto rounded-full bg-blue-950 px-1.5 text-[9px] font-medium text-blue-400">
+							{installedCount}
+						</span>
+					)}
+				</button>
+			</div>
+
+			{/* Projects label */}
+			<div className="px-3 pt-2 pb-1 text-[9px] tracking-wide text-neutral-700 uppercase">
+				Projects
+			</div>
 
 			{/* Groups */}
 			<div className="flex-1 overflow-y-auto px-1.5 pb-2">
@@ -329,6 +374,16 @@ export function Sidebar({
 				})()}
 
 			{/* Footer */}
+			{/* User profile bar */}
+			<div className="flex items-center gap-2 border-t border-neutral-800 px-3 py-2">
+				<span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-950 text-[10px] font-medium text-blue-400">
+					PD
+				</span>
+				<span className="min-w-0 flex-1 truncate text-xs text-neutral-400">
+					Pi User
+				</span>
+			</div>
+
 			<div className="grid grid-cols-4 gap-1 border-t border-neutral-800 p-1.5">
 				<button type="button" data-testid="sidebar-models" onClick={() => onOpenSheet("models")} className="rounded px-1 py-1.5 text-[10px] text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200">Models</button>
 				<button type="button" data-testid="sidebar-settings" onClick={() => onOpenSheet("settings")} className="rounded px-1 py-1.5 text-[10px] text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200">Settings</button>

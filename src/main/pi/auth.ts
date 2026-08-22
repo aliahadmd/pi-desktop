@@ -173,6 +173,36 @@ export class AuthService {
 			this.onScopedModelsChanged(req.models);
 			return null;
 		});
+		router.handle("packages.search", async (req) => {
+			void req.query;
+			try {
+				const { execFile } = await import("node:child_process");
+				const { promisify } = await import("node:util");
+				const exec = promisify(execFile);
+				const raw = await exec("npm", ["search", "pi-package", "--json"], {
+					timeout: 15_000,
+					maxBuffer: 1024 * 1024,
+				});
+				const results = JSON.parse(raw.stdout) as Array<{
+					name: string;
+					description?: string;
+					version: string;
+					publisher?: { username: string };
+					date: string;
+				}>;
+				return {
+					results: results.map((r) => ({
+						name: r.name,
+						description: r.description ?? "",
+						version: r.version,
+						publisher: typeof r.publisher === "object" ? r.publisher?.username ?? "unknown" : "unknown",
+						date: r.date,
+					})),
+				};
+			} catch (error) {
+				throw new Error(`npm search failed: ${error instanceof Error ? error.message : String(error)}`);
+			}
+		});
 		router.handle("packages.list", () => {
 			const pm = this.makePackageManager();
 			return { packages: pm.listConfiguredPackages() };

@@ -26,6 +26,8 @@ import {
 	type IngestContext,
 } from "../lib/ingest";
 
+const MAX_BLOCKS = 2000;
+
 export interface SessionUi {
 	id: string;
 	backend: "sdk" | "rpc";
@@ -97,6 +99,16 @@ export const useSessions = create<PiSessionsState>((set, get) => {
 				),
 			};
 			for (const event of events) applyEvent(ctxCopy, event);
+			if (ctxCopy.blocks.length > MAX_BLOCKS) {
+				const trimmed = ctxCopy.blocks.length - MAX_BLOCKS;
+				ctxCopy.blocks = ctxCopy.blocks.slice(-MAX_BLOCKS);
+				ctxCopy.blocks.unshift({
+					kind: "notice",
+					id: `trim-${Date.now()}`,
+					text: `…${trimmed} earlier messages hidden`,
+					level: "info",
+				});
+			}
 			updates[sessionId] = {
 				ctx: ctxCopy,
 				blocks: ctxCopy.blocks,

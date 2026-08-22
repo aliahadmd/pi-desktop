@@ -3,6 +3,7 @@
  * tree), terminal toggle, composer, status bar, dialogs.
  */
 import { useEffect, useState } from "react";
+import { playSound, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
 import type { PiImageInput } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
@@ -18,7 +19,7 @@ import {
 } from "../components/workspace/Dock";
 import { TerminalPanel } from "../components/workspace/TerminalPanel";
 
-type DockTab = "files" | "review" | "commands" | "tree" | null;
+type DockTab = "files" | "review" | "commands" | "tree" | "terminal" | null;
 
 export function refreshState(sessionId: string): void {
 	void window.piDesktop
@@ -41,11 +42,23 @@ export default function ChatPage(): React.JSX.Element {
 	const [createError, setCreateError] = useState<string | null>(null);
 	const [dockTab, setDockTab] = useState<DockTab>(null);
 	const [treeRefreshKey, setTreeRefreshKey] = useState(0);
-	const [terminalOpen, setTerminalOpen] = useState(false);
+	const [terminalTabs, setTerminalTabs] = useState<Array<{ id: string; label: string }>>([
+		{ id: "term-1", label: "Terminal 1" },
+	]);
+	const [activeTermTab, setActiveTermTab] = useState(0);
+	const [nextTermNum, setNextTermNum] = useState(2);
 	const [compactOpen, setCompactOpen] = useState(false);
 	const [compactInstructions, setCompactInstructions] = useState("");
 	const [compacting, setCompacting] = useState(false);
 	const [insertedText, setInsertedText] = useState<string | null>(null);
+	const play = (event: SoundEvent): void => {
+		void window.piDesktop
+			.invoke({ type: "app.settings.get", key: "soundEnabled" })
+			.then((r) => {
+				if (r.ok && r.data !== false) playSound(event);
+			});
+	};
+
 	const [dockWidth, setDockWidth] = useState(320);
 
 	useEffect(() => {
@@ -69,11 +82,12 @@ export default function ChatPage(): React.JSX.Element {
 		return () => clearTimeout(t);
 	}, [dockWidth]);
 
+	// ⌘J toggles the Terminal dock tab
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
 			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
 				e.preventDefault();
-				setTerminalOpen((v) => !v);
+				setDockTab((prev) => (prev === "terminal" ? null : "terminal"));
 			}
 		};
 		window.addEventListener("keydown", onKey);
@@ -115,6 +129,7 @@ export default function ChatPage(): React.JSX.Element {
 	): void {
 		if (activeId === null) return;
 		if (text.length > 0) addUserBlock(activeId, text);
+		play("sent");
 		void window.piDesktop
 			.invoke({
 				type: "session.prompt",
@@ -126,7 +141,9 @@ export default function ChatPage(): React.JSX.Element {
 			.then((result) => {
 				if (!result.ok) {
 					pushErrorNotice(activeId, `Prompt rejected: ${result.error.message}`);
+					play("error");
 				} else {
+					play("complete");
 					refreshState(activeId);
 				}
 			});
@@ -220,34 +237,47 @@ export default function ChatPage(): React.JSX.Element {
 					</div>
 				</div>
 			) : (
-				<>
-					<div className="flex min-h-0 flex-1 overflow-hidden">
+<>
+{/* Icon rail + dock */}
+					<div className="flex min-h-0 flex-1">
 						<div className="flex min-w-0 flex-1 flex-col">
 							<Transcript blocks={active.blocks} phase={active.phase} />
 						</div>
+
+						{/* Icon rail (ch22) */}
+						{active.phase !== undefined && (
+							<div className="flex w-10 shrink-0 flex-col items-center gap-0.5 border-l border-neutral-800 py-2">
+								{([
+									{ tab: "files" as const, label: "📁", title: "Files" },
+									{ tab: "review" as const, label: "🔍", title: `Review (${reviewCount})` },
+									{ tab: "commands" as const, label: "⌘", title: "Commands" },
+									{ tab: "tree" as const, label: "🌳", title: "Tree" },
+								]).map(({ tab, label, title }) => (
+									<button
+										key={tab}
+										type="button"
+										data-testid={`rail-${tab}`}
+										onClick={() => setDockTab(dockTab === tab ? null : tab)}
+										title={title}
+										className={`flex h-8 w-8 items-center justify-center rounded text-sm transition-standard ${
+											dockTab === tab
+												? "bg-neutral-800 text-blue-400"
+												: "text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
+										}`}
+									>
+										{label}
+										{tab === "review" && reviewCount > 0 && (
+											<span className="absolute ml-4 -mt-3 rounded-full bg-red-600 px-1 text-[8px] text-white">
+												{reviewCount}
+											</span>
+										)}
+									</button>
+								))}
+							</div>
+		)}
+
 						{dockTab !== null && (
-							<div
-								className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-blue-900/60"
-								data-testid="dock-resize"
-								onPointerDown={(e) => {
-									e.currentTarget.setPointerCapture(e.pointerId);
-									const startX = e.clientX;
-									const startW = dockWidth;
-									const move = (ev: PointerEvent): void => {
-										const next = Math.min(520, Math.max(280, startW - (ev.clientX - startX)));
-										setDockWidth(next);
-									};
-									const up = (): void => {
-										window.removeEventListener("pointermove", move);
-										window.removeEventListener("pointerup", up);
-									};
-									window.addEventListener("pointermove", move);
-									window.addEventListener("pointerup", up);
-								}}
-							/>
-						)}
-						<AnimatePresence initial={false}>
-						{dockTab !== null && (
+							<AnimatePresence initial={false}>
 							<motion.div
 								initial={{ width: 0, opacity: 0 }}
 								animate={{ width: `${dockWidth}px`, opacity: 1 }}
@@ -255,7 +285,7 @@ export default function ChatPage(): React.JSX.Element {
 								transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }}
 								className="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-neutral-800"
 							>
-								<div className="flex h-8 items-center gap-1 border-b border-neutral-800 px-2">
+								<div className="flex h-8 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
 									{(["files", "review", "commands", "tree"] as const).map((t) => (
 										<button
 											key={t}
@@ -282,12 +312,69 @@ export default function ChatPage(): React.JSX.Element {
 									{dockTab === "files" && <FileExplorer cwd={active.cwd} />}
 									{dockTab === "review" && <ReviewQueue blocks={active.blocks} />}
 									{dockTab === "commands" && (
-										<CommandsBrowser
-											sessionId={active.id}
-											onInsert={(text) => setInsertedText(text)}
-										/>
+										<CommandsBrowser sessionId={active.id} onInsert={(text) => setInsertedText(text)} />
 									)}
-									{dockTab === "tree" && (
+									{dockTab === "terminal" && (
+									<div className="flex h-full flex-col">
+										{/* Terminal tab bar */}
+										<div className="flex h-7 shrink-0 items-center gap-0.5 border-b border-neutral-800 px-1">
+											{terminalTabs.map((tab, i) => (
+												<button
+													key={tab.id}
+													type="button"
+													onClick={() => setActiveTermTab(i)}
+													className={`group flex items-center gap-1 rounded px-2 py-0.5 text-[10px] ${
+														i === activeTermTab
+															? "bg-neutral-800 text-neutral-100"
+															: "text-neutral-500 hover:text-neutral-300"
+													}`}
+												>
+													{tab.label}
+													<span
+														role="button"
+														tabIndex={0}
+														onClick={(e) => {
+															e.stopPropagation();
+															if (terminalTabs.length > 1) {
+																setTerminalTabs((prev) => prev.filter((_, j) => j !== i));
+																setActiveTermTab((prev) => Math.min(prev, terminalTabs.length - 2));
+															}
+														}}
+														onKeyDown={(e) => {
+															if (e.key === "Enter" && terminalTabs.length > 1) {
+																setTerminalTabs((prev) => prev.filter((_, j) => j !== i));
+															}
+														}}
+														className="ml-0.5 text-neutral-600 hover:text-red-400"
+													>
+														×
+													</span>
+												</button>
+											))}
+											<button
+												type="button"
+												data-testid="add-terminal"
+												onClick={() => {
+													const num = nextTermNum;
+													setTerminalTabs((prev) => [...prev, { id: `term-${num}-${Date.now()}`, label: `Terminal ${num}` }]);
+													setActiveTermTab(terminalTabs.length);
+													setNextTermNum(num + 1);
+												}}
+												className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+												title="New terminal"
+											>
+												+
+											</button>
+										</div>
+										<div className="min-h-0 flex-1">
+											<TerminalPanel
+												key={terminalTabs[activeTermTab]?.id ?? "term-1"}
+												cwd={active.cwd}
+											/>
+										</div>
+									</div>
+								)}
+								{dockTab === "tree" && (
 										<SessionTreePanel
 											sessionId={active.id}
 											refreshKey={treeRefreshKey}
@@ -322,74 +409,14 @@ export default function ChatPage(): React.JSX.Element {
 										/>
 									)}
 								</div>
-								</motion.div>
+							</motion.div>
+							</AnimatePresence>
 						)}
-						</AnimatePresence>
 					</div>
 
-					<AnimatePresence initial={false}>
-						{terminalOpen && (
-							<motion.div
-								initial={{ height: 0 }}
-								animate={{ height: 224 }}
-								exit={{ height: 0 }}
-								transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }}
-								className="shrink-0 overflow-hidden border-t border-neutral-800 bg-black"
-							>
-								<TerminalPanel cwd={active.cwd} />
-							</motion.div>
-						)}
-					</AnimatePresence>
 
-					{/* Toolbar */}
+					{/* Bottom control row */}
 					<div className="flex items-center gap-2 border-t border-neutral-800 px-3 py-1">
-						<button
-							type="button"
-							onClick={() => setDockTab(dockTab === "files" ? null : "files")}
-							className={`rounded px-2 py-0.5 text-[10px] ${
-								dockTab === "files"
-									? "bg-neutral-800 text-neutral-100"
-									: "text-neutral-500 hover:text-neutral-300"
-							}`}
-						>
-							Files
-						</button>
-						<button
-							type="button"
-							onClick={() => setDockTab(dockTab === "review" ? null : "review")}
-							className={`rounded px-2 py-0.5 text-[10px] ${
-								dockTab === "review"
-									? "bg-neutral-800 text-neutral-100"
-									: "text-neutral-500 hover:text-neutral-300"
-							}`}
-						>
-							Review ({reviewCount})
-						</button>
-						<button
-							type="button"
-							onClick={() => setDockTab(dockTab === "commands" ? null : "commands")}
-							className={`rounded px-2 py-0.5 text-[10px] ${
-								dockTab === "commands"
-									? "bg-neutral-800 text-neutral-100"
-									: "text-neutral-500 hover:text-neutral-300"
-							}`}
-						>
-							Commands
-						</button>
-						<button
-							type="button"
-							onClick={() => {
-								setDockTab(dockTab === "tree" ? null : "tree");
-								setTreeRefreshKey((k) => k + 1);
-							}}
-							className={`rounded px-2 py-0.5 text-[10px] ${
-								dockTab === "tree"
-									? "bg-neutral-800 text-neutral-100"
-									: "text-neutral-500 hover:text-neutral-300"
-							}`}
-						>
-							Tree
-						</button>
 						<button
 							type="button"
 							disabled={active.phase !== "idle"}
@@ -411,33 +438,24 @@ export default function ChatPage(): React.JSX.Element {
 											: { type: "session.export_jsonl", sessionId: active.id }
 									)
 									.then((r) => {
-										if (!r.ok) {
-											pushErrorNotice(active.id, r.error.message);
-										} else {
-											const exported = r.data as { path: string };
-											useSessions
-												.getState()
-												.pushNotice(active.id, `Exported to ${exported.path}`, "info");
-										}
+										if (!r.ok) pushErrorNotice(active.id, r.error.message);
 									});
 							}}
 							defaultValue=""
 							className="rounded bg-transparent px-1 py-0.5 text-[10px] text-neutral-500 hover:text-neutral-300"
 							title="Export session"
 						>
-							<option value="" disabled>
-								Export…
-							</option>
-							<option value="html">Export HTML</option>
-							<option value="jsonl">Export JSONL</option>
+							<option value="" disabled>Export…</option>
+							<option value="html">HTML</option>
+							<option value="jsonl">JSONL</option>
 						</select>
 						<button
 							type="button"
-							onClick={() => setTerminalOpen((v) => !v)}
 							data-testid="toggle-terminal"
-							className={`ml-auto rounded px-2 py-0.5 text-[10px] ${
-								terminalOpen
-									? "bg-neutral-800 text-neutral-100"
+							onClick={() => setDockTab((prev) => (prev === "terminal" ? null : "terminal"))}
+							className={`rounded px-2 py-0.5 text-[10px] ${
+								dockTab === "terminal"
+									? "bg-neutral-800 text-blue-400"
 									: "text-neutral-500 hover:text-neutral-300"
 							}`}
 						>
@@ -445,6 +463,37 @@ export default function ChatPage(): React.JSX.Element {
 						</button>
 					</div>
 
+					{compactOpen && (
+						<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
+							<div className="w-[420px] rounded-xl border border-neutral-700 bg-neutral-900 p-5">
+								<h3 className="mb-1 text-sm font-semibold text-neutral-100">Compact context</h3>
+								<p className="mb-3 text-xs text-neutral-400">Summarizes older messages to free window space.</p>
+								<textarea value={compactInstructions} onChange={(e) => setCompactInstructions(e.target.value)} rows={3} placeholder="Optional instructions for the summary…" className="mb-4 w-full resize-none rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-blue-500" />
+								<div className="flex justify-end gap-2">
+									<button type="button" onClick={() => setCompactOpen(false)} className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700">Cancel</button>
+									<button type="button" data-testid="compact-confirm" disabled={compacting}
+										onClick={() => {
+											setCompacting(true);
+											void window.piDesktop.invoke({
+												type: "session.compact",
+												sessionId: active.id,
+												...(compactInstructions.length > 0 ? { customInstructions: compactInstructions } : {}),
+											}).then((r) => {
+												setCompacting(false);
+												if (!r.ok) { pushErrorNotice(active.id, r.error.message); }
+												else {
+													useSessions.getState().pushNotice(active.id, `Context compacted: ${String((r.data as any)?.tokensBefore ?? "?")} → ${String((r.data as any)?.estimatedTokensAfter ?? "?")} tokens.`, "info");
+												}
+												setCompactOpen(false);
+												setCompactInstructions("");
+											});
+										}}
+										className="rounded bg-purple-700 px-3 py-1.5 text-xs text-white hover:bg-purple-600 disabled:opacity-40"
+									>{compacting ? "Compacting…" : "Compact"}</button>
+								</div>
+							</div>
+						</div>
+					)}
 					<Composer
 						insertText={insertedText}
 						onInsertHandled={() => setInsertedText(null)}
@@ -452,6 +501,7 @@ export default function ChatPage(): React.JSX.Element {
 						queueCount={active.queue.steering.length + active.queue.followUp.length}
 						projectRoot={active.cwd}
 						onOpenPalette={() => setDockTab("commands")}
+						modelName={active.model?.name}
 						onSend={send}
 						onBash={runBash}
 						onAbort={() => {
@@ -576,8 +626,25 @@ export default function ChatPage(): React.JSX.Element {
 					)}
 
 					{active.dead !== undefined && (
-						<div className="border-t border-red-900 bg-red-950/60 px-4 py-2 text-xs text-red-300">
-							Backend died: {active.dead}
+						<div className="flex items-center gap-2 border-t border-red-900 bg-red-950/60 px-4 py-2 text-xs text-red-300">
+							<span className="flex-1">Backend died: {active.dead}</span>
+							<button
+								type="button"
+								onClick={() => {
+									void window.piDesktop
+										.invoke({
+											type: "session.create",
+											cwd: active.cwd,
+											backend: active.backend,
+										})
+										.then((r) => {
+											if (r.ok) open(r.data);
+										});
+								}}
+								className="rounded bg-red-800 px-2.5 py-0.5 text-[10px] text-white hover:bg-red-700"
+							>
+								Reconnect
+							</button>
 						</div>
 					)}
 				</>

@@ -193,6 +193,8 @@ const AssistantBlockView = memo(function AssistantBlockView({
 });
 
 const NoticeBlockView = memo(function NoticeBlockView({ block }: { block: NoticeBlock }) {
+	const [dismissed, setDismissed] = useState(false);
+	if (dismissed) return null;
 	const cls =
 		block.level === "error"
 			? "text-red-400 border-red-900 bg-red-950/40"
@@ -201,7 +203,17 @@ const NoticeBlockView = memo(function NoticeBlockView({ block }: { block: Notice
 				: "text-neutral-400 border-neutral-800 bg-neutral-900/40";
 	return (
 		<div className="px-4 py-1">
-			<div className={`rounded border px-3 py-1.5 text-xs ${cls}`}>{block.text}</div>
+			<div className={`flex items-center gap-2 rounded border px-3 py-1.5 text-xs ${cls}`}>
+				<span className="flex-1">{block.text}</span>
+				<button
+					type="button"
+					onClick={() => setDismissed(true)}
+					className="shrink-0 opacity-50 hover:opacity-100"
+					title="Dismiss"
+				>
+					×
+				</button>
+			</div>
 		</div>
 	);
 });

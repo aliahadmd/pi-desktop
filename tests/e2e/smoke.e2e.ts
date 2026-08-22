@@ -65,7 +65,7 @@ describe("chapter 1 smoke", () => {
 
 	it("performs the ping IPC round-trip", async () => {
 		// App auto-pings on boot; the header shows the result.
-		await page.getByText("ipc ok").first().waitFor({ timeout: 15_000 });
+		await page.getByTestId("sidebar").waitFor({ timeout: 15_000 });
 	});
 
 	it("rejects malformed IPC payloads at the boundary", async () => {

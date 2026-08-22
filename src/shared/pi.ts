@@ -543,6 +543,19 @@ export const scopedModelsSetRequestSchema = Type.Object({
 	),
 });
 
+export interface NpmSearchResult {
+	name: string;
+	description: string;
+	version: string;
+	publisher: string;
+	date: string;
+}
+
+export const packagesSearchRequestSchema = Type.Object({
+	type: Type.Literal("packages.search"),
+	query: Type.Optional(Type.String()),
+});
+
 export const packagesListRequestSchema = Type.Object({
 	type: Type.Literal("packages.list"),
 });
@@ -728,6 +741,7 @@ export const piRequestSchemas = {
 	"models.json.save": modelsJsonSaveRequestSchema,
 	"session.scoped_models.get": scopedModelsGetRequestSchema,
 	"session.scoped_models.set": scopedModelsSetRequestSchema,
+	"packages.search": packagesSearchRequestSchema,
 	"packages.list": packagesListRequestSchema,
 	"packages.install": packagesInstallRequestSchema,
 	"packages.remove": packagesRemoveRequestSchema,
@@ -807,6 +821,7 @@ export interface PiResponseMap {
 	"models.json.save": null;
 	"session.scoped_models.get": { models: Array<{ provider: string; modelId: string; thinkingLevel?: string }> };
 	"session.scoped_models.set": null;
+	"packages.search": { results: NpmSearchResult[] };
 	"packages.list": {
 		packages: Array<{
 			source: string;
