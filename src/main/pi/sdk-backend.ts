@@ -65,6 +65,8 @@ export class SdkPiBackend implements IPiBackend {
 					: SessionManager.create(cwd);
 
 		const customTools = (this.options.desktopTools ?? []) as import("@earendil-works/pi-coding-agent").ToolDefinition[];
+		const extensionFactories = (this.options.extensionFactories ?? []) as
+			import("@earendil-works/pi-coding-agent").InlineExtension[];
 		const scopedModels = (this.options.scopedModels ?? [])
 			.map((entry: { provider: string; modelId: string; thinkingLevel?: string }) => {
 				const model = this.modelRuntime?.getModel(entry.provider, entry.modelId);
@@ -84,11 +86,16 @@ export class SdkPiBackend implements IPiBackend {
 			sessionManager: sm,
 			sessionStartEvent,
 		}) => {
+			// Inline extension factories are SDK-mode only: a function cannot cross the
+			// `pi --mode rpc` subprocess boundary. RPC sessions run without the gate.
 			const services = await createAgentSessionServices({
 				cwd: runtimeCwd,
 				agentDir,
 				...(this.modelRuntime !== null ? { modelRuntime: this.modelRuntime } : {}),
 				settingsManager,
+				...(extensionFactories.length > 0
+					? { resourceLoaderOptions: { extensionFactories } }
+					: {}),
 			});
 			return {
 				...(await createAgentSessionFromServices({

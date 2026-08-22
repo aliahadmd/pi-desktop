@@ -28,8 +28,8 @@ export interface BackendOptions {
 	noSession?: boolean;
 	/** Shared app-level ModelRuntime (chapter 6) — keys apply across sessions. */
 	modelRuntime?: unknown;
-	/** Extra extension files to load (e.g. the bundled approval extension). */
-	extensionPaths?: string[];
+	/** Desktop-owned extensions loaded into every session (e.g. the approval gate). */
+	extensionFactories?: unknown[];
 	/** Scoped model cycle list ({provider, modelId, thinkingLevel}). */
 	scopedModels?: Array<{ provider: string; modelId: string; thinkingLevel?: string }>;
 	/** Desktop-native custom tools (chapter 12). */

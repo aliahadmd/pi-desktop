@@ -1,12 +1,13 @@
 /**
  * Pi Desktop approval extension.
  *
- * Ships with the desktop app and is loaded via DefaultResourceLoader's
- * additionalExtensionPaths when "confirm before apply" mode is enabled.
- * Routes bash/edit/write tool calls through ctx.ui.confirm, which Pi Desktop
- * bridges to a native dialog. Upstream-friendly: uses only public extension APIs.
+ * Ships with the desktop app and is loaded in-process as an inline
+ * ExtensionFactory (see PiService.setExtensionFactories) when "confirm before
+ * apply" mode is enabled. Routes bash/edit/write tool calls through
+ * ctx.ui.confirm, which Pi Desktop bridges to a native dialog.
+ * Upstream-friendly: uses only public extension APIs.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 
 interface ToolCallLike {
 	toolName: string;
@@ -31,7 +32,8 @@ function summarize(event: ToolCallLike): string {
 	return `${event.toolName}: ${filePath}`;
 }
 
-export default function approveExtension(pi: ExtensionAPI): void {
+/** Confirm-before-apply gate: routes bash/edit/write through ctx.ui.confirm. */
+export const approveExtension: ExtensionFactory = (pi: ExtensionAPI) => {
 	pi.on("tool_call", async (event, ctx) => {
 		if (
 			event.toolName !== "bash" &&
@@ -48,4 +50,4 @@ export default function approveExtension(pi: ExtensionAPI): void {
 			return { block: true, reason: "Denied by user in Pi Desktop." };
 		}
 	});
-}
+};
