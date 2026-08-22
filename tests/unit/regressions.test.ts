@@ -4,6 +4,7 @@
  * M-7 (message_end no longer clobbers completed blocks),
  * H-2/L-2 (sidecar rebuild channel registered), M-2 contract (bash requestId).
  */
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	applyEvent,
@@ -164,5 +165,45 @@ describe("regression: user block survives streaming updates", () => {
 		const user = after.find((b): b is UserBlock => b.kind === "user");
 		expect(user?.text).toBe("my prompt");
 		expect(before).toBeGreaterThan(0);
+	});
+});
+
+describe("regression: escaped absolute positioning (plan 003)", () => {
+	it("rail drag strip has a positioned ancestor", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/shell/Sidebar.tsx",
+			"utf8",
+		);
+		expect(source).toContain("relative flex h-full flex-col items-center");
+	});
+
+	it("expanded sidebar is positioned for its context menu", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/shell/Sidebar.tsx",
+			"utf8",
+		);
+		expect(source).toContain("relative flex h-full flex-col border-r");
+	});
+
+	it("composer wrapper is positioned for the drop overlay", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/chat/Composer.tsx",
+			"utf8",
+		);
+		expect(source).toContain('className="relative px-3 pb-3"');
+	});
+
+	it("review badge no longer uses margin-hack positioning", () => {
+		const source = readFileSync("src/renderer/src/pages/ChatPage.tsx", "utf8");
+		expect(source).not.toContain("absolute ml-4 -mt-3");
+	});
+
+	it("sheet is viewport-fixed, not ancestor-dependent", () => {
+		const source = readFileSync(
+			"src/renderer/src/components/shell/Sheet.tsx",
+			"utf8",
+		);
+		expect(source).toContain("fixed inset-0 z-40");
+		expect(source).not.toContain("absolute inset-0 z-40");
 	});
 });

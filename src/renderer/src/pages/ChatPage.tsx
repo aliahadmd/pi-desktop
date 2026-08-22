@@ -259,7 +259,7 @@ export default function ChatPage(): React.JSX.Element {
 										data-testid={`rail-${tab}`}
 										onClick={() => setDockTab(dockTab === tab ? null : tab)}
 										title={title}
-										className={`flex h-8 w-8 items-center justify-center rounded text-sm transition-standard ${
+										className={`relative flex h-8 w-8 items-center justify-center rounded text-sm transition-standard ${
 											dockTab === tab
 												? "bg-neutral-800 text-blue-400"
 												: "text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
@@ -267,7 +267,7 @@ export default function ChatPage(): React.JSX.Element {
 									>
 										{label}
 										{tab === "review" && reviewCount > 0 && (
-											<span className="absolute ml-4 -mt-3 rounded-full bg-red-600 px-1 text-[8px] text-white">
+											<span className="absolute -right-0.5 -top-0.5 rounded-full bg-red-600 px-1 text-[8px] leading-tight text-white">
 												{reviewCount}
 											</span>
 										)}

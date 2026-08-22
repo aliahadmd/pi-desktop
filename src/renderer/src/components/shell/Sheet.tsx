@@ -43,7 +43,9 @@ export function Sheet({
 		<AnimatePresence>
 			{open && (
 				<motion.div
-					className="absolute inset-0 z-40 flex flex-col bg-[#141416]"
+					/* fixed, not absolute: the sheet is a full-window surface and must not
+					   depend on the App root staying unpositioned. */
+					className="fixed inset-0 z-40 flex flex-col bg-[#141416]"
 					data-testid={testId}
 					initial={{ opacity: 0, y: 12 }}
 					animate={{ opacity: 1, y: 0 }}
