@@ -21,7 +21,8 @@ according to [../piplan/main.md](../piplan/main.md).
 - **Chapter 7 — Workspace & power features: complete** ([docs/chapter7-status.md](docs/chapter7-status.md))
   File explorer (symlink-safe, root-scoped), diff review queue, embedded xterm terminal
   (node-pty), commands browser, tray + native menus + completion notifications, and a
-  bundled approval extension (confirm-before-apply via pi's public extension API).
+  bundled approval extension (confirm-before-apply via pi's public extension API);
+  on by default and user-disableable in Settings, SDK-mode sessions only.
 - **Chapter 8 — Hardening & release: complete** ([docs/chapter8-status.md](docs/chapter8-status.md))
   IPC fuzzing (found+fixed a real crash), secrets scanning, dependency audits clean,
   auto-update wiring, PyInstaller sidecar binary, CI + signed/notarized release
