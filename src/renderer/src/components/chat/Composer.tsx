@@ -1,8 +1,8 @@
 /**
- * Composer: auto-growing input, Enter=send (steer/followUp while streaming),
- * Shift+Enter newline, Esc abort, image paste.
+ * Composer v2 (chapter 16): borderless command surface with inline model chip,
+ * "/" palette, steer/follow-up segmented toggle, attach row, git-strip slot.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PiImageInput } from "../../../../shared/pi";
 
 export function Composer({
@@ -13,6 +13,8 @@ export function Composer({
 	onSend,
 	onBash,
 	onAbort,
+	onOpenPalette,
+	projectRoot,
 }: {
 	streaming: boolean;
 	queueCount: number;
@@ -21,26 +23,70 @@ export function Composer({
 	onSend(text: string, images: PiImageInput[], streamingBehavior?: "steer" | "followUp"): void;
 	onBash(command: string, excludeFromContext: boolean): void;
 	onAbort(): void;
+	onOpenPalette(): void;
+	projectRoot: string | null;
 }): React.JSX.Element {
 	const [text, setText] = useState("");
 	const [images, setImages] = useState<PiImageInput[]>([]);
 	const [followUpMode, setFollowUpMode] = useState(false);
+	const [git, setGit] = useState<{
+		repo: boolean;
+		branch: string | null;
+		staged: number;
+		unstaged: number;
+		ahead: number;
+		behind: number;
+	} | null>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
-	useEffect(() => {
-		if (insertText !== undefined && insertText !== null && insertText.length > 0) {
-			setText((prev) => (prev.endsWith(" ") || prev.length === 0 ? prev + insertText : `${prev} ${insertText}`));
-			onInsertHandled?.();
-			inputRef.current?.focus();
-		}
-	}, [insertText, onInsertHandled]);
-
-	function autoGrow(): void {
+	const autoGrow = useCallback((): void => {
 		const el = inputRef.current;
 		if (el === null) return;
 		el.style.height = "auto";
 		el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-	}
+	}, []);
+
+	// Git context strip data (chapter 16).
+	useEffect(() => {
+		if (projectRoot === null) {
+			setGit(null);
+			return;
+		}
+		let cancelled = false;
+		void window.piDesktop
+			.invoke({ type: "git.context", root: projectRoot })
+			.then((r) => {
+				if (!cancelled && r.ok) setGit(r.data as never);
+			})
+			.catch(() => {});
+		const timer = setInterval(() => {
+			void window.piDesktop
+				.invoke({ type: "git.context", root: projectRoot })
+				.then((r) => {
+					if (!cancelled && r.ok) setGit(r.data as never);
+				})
+				.catch(() => {});
+		}, 10_000);
+		return () => {
+			cancelled = true;
+			clearInterval(timer);
+		};
+	}, [projectRoot]);
+
+	useEffect(() => {
+		autoGrow();
+	}, [text, autoGrow]);
+
+	useEffect(() => {
+		if (insertText !== undefined && insertText !== null && insertText.length > 0) {
+			setText(
+				(prev) =>
+					prev.endsWith(" ") || prev.length === 0 ? prev + insertText : `${prev} ${insertText}`
+			);
+			onInsertHandled?.();
+			inputRef.current?.focus();
+		}
+	}, [insertText, onInsertHandled]);
 
 	async function filesToImages(files: FileList): Promise<PiImageInput[]> {
 		const out: PiImageInput[] = [];
@@ -72,32 +118,36 @@ export function Composer({
 		onSend(trimmed, images, behavior);
 		setText("");
 		setImages([]);
-		requestAnimationFrame(autoGrow);
 	}
 
 	return (
-		<div className="border-t border-neutral-800 p-3">
-			{queueCount > 0 && (
-				<div className="mb-1.5 text-[10px] text-amber-500">
-					{queueCount} message{queueCount > 1 ? "s" : ""} queued
+		<div className="px-3 pb-3">
+			{/* Git context strip */}
+			{git !== null && git.repo && (
+				<div
+					className="mb-1.5 flex items-center gap-2 rounded-t-lg border border-b-0 border-neutral-800 bg-neutral-900/60 px-4 py-1.5 font-mono text-[10px] text-neutral-400"
+					data-testid="git-strip"
+				>
+					<span>⎇ {git.branch ?? "no branch"}</span>
+					{(git.staged > 0 || git.unstaged > 0) && (
+						<span>
+							{git.staged > 0 && <span className="text-green-500">+{git.staged} </span>}
+							{git.unstaged > 0 && <span className="text-red-400">−{git.unstaged}</span>}
+						</span>
+					)}
+					{git.ahead > 0 && <span className="text-neutral-500">↑{git.ahead}</span>}
+					{git.behind > 0 && <span className="text-neutral-500">↓{git.behind}</span>}
+					<button
+						type="button"
+						onClick={onOpenPalette}
+						className="ml-auto rounded bg-neutral-800 px-1.5 py-0.5 text-[9px] text-neutral-300 hover:bg-neutral-700"
+					>
+						Open review
+					</button>
 				</div>
 			)}
-			{images.length > 0 && (
-				<div className="mb-1.5 flex gap-2">
-					{images.map((img, i) => (
-						<button
-							key={i}
-							type="button"
-							onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-							className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-400 hover:bg-red-950 hover:text-red-300"
-							title="Remove"
-						>
-							image {i + 1} ({img.mimeType}) ×
-						</button>
-					))}
-				</div>
-			)}
-			<div className="flex items-end gap-2">
+
+			<div className="rounded-xl border border-neutral-700/80 bg-neutral-900/80 transition-colors focus-within:border-blue-600/70">
 				<textarea
 					ref={inputRef}
 					value={text}
@@ -105,6 +155,7 @@ export function Composer({
 					onChange={(e) => {
 						setText(e.target.value);
 						autoGrow();
+						if (e.target.value === "/") onOpenPalette();
 					}}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -115,6 +166,7 @@ export function Composer({
 					onPaste={(e) => {
 						const files = e.clipboardData.files;
 						if (files.length > 0) {
+							e.preventDefault();
 							void filesToImages(files).then((imgs) =>
 								setImages((prev) => [...prev, ...imgs])
 							);
@@ -125,43 +177,82 @@ export function Composer({
 							? followUpMode
 								? "Queue as follow-up…"
 								: "Steer the agent…"
-							: "Prompt pi… (! bash, !! bash excl., Shift+Enter newline)"
+							: "Type / for commands — describe a task…"
 					}
 					data-testid="composer-input"
-					className="max-h-[200px] flex-1 resize-none rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+					className="max-h-[200px] w-full resize-none bg-transparent px-4 pt-3 text-sm outline-none placeholder:text-neutral-600"
 				/>
-				{streaming ? (
-					<>
-						<button
-							type="button"
-							onClick={() => setFollowUpMode((v) => !v)}
-							className={`rounded px-2 py-2 text-[10px] ${
-								followUpMode ? "bg-purple-800 text-white" : "bg-neutral-800 text-neutral-400"
-							}`}
-							title="Toggle steer / follow-up queueing"
-						>
-							{followUpMode ? "FOLLOW-UP" : "STEER"}
-						</button>
-						<button
-							type="button"
-							onClick={onAbort}
-							data-testid="abort-button"
-							className="rounded bg-red-800 px-3 py-2.5 text-xs font-medium text-white hover:bg-red-700"
-						>
-							Stop
-						</button>
-					</>
-				) : (
-					<button
-						type="button"
-						onClick={submit}
-						data-testid="send-button"
-						disabled={text.trim().length === 0 && images.length === 0}
-						className="rounded bg-blue-600 px-4 py-2.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40"
-					>
-						Send
-					</button>
+
+				{images.length > 0 && (
+					<div className="flex gap-2 px-4 pb-1">
+						{images.map((img, i) => (
+							<button
+								key={i}
+								type="button"
+								onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+								className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-400 hover:bg-red-950 hover:text-red-300"
+								title="Remove"
+							>
+								image {i + 1} ({img.mimeType}) ×
+							</button>
+						))}
+					</div>
 				)}
+
+				{/* Bottom control row */}
+				<div className="flex items-center gap-2 px-3 pb-2.5 pt-1">
+					{streaming ? (
+						<>
+							<div className="flex overflow-hidden rounded-md border border-neutral-700">
+								<button
+									type="button"
+									onClick={() => setFollowUpMode(false)}
+									className={`px-2 py-1 text-[10px] ${
+										!followUpMode ? "bg-blue-950 text-blue-300" : "bg-neutral-900 text-neutral-500"
+									}`}
+								>
+									Steer
+								</button>
+								<button
+									type="button"
+									onClick={() => setFollowUpMode(true)}
+									className={`px-2 py-1 text-[10px] ${
+										followUpMode ? "bg-purple-950 text-purple-300" : "bg-neutral-900 text-neutral-500"
+									}`}
+								>
+									Follow-up
+								</button>
+							</div>
+							{queueCount > 0 && (
+								<span className="text-[10px] text-amber-500">{queueCount} queued</span>
+							)}
+							<button
+								type="button"
+								onClick={onAbort}
+								data-testid="abort-button"
+								className="ml-auto rounded bg-red-800 px-4 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+							>
+								Stop
+							</button>
+						</>
+					) : (
+						<>
+							<span className="text-[10px] text-neutral-600">
+								Type / for commands · ! for bash
+							</span>
+							<button
+								type="button"
+								data-testid="send-button"
+								disabled={text.trim().length === 0 && images.length === 0}
+								onClick={submit}
+								className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40"
+								title="Send"
+							>
+								↑
+							</button>
+						</>
+					)}
+				</div>
 			</div>
 		</div>
 	);

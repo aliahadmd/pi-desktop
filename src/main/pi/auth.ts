@@ -9,7 +9,7 @@
  * app_settings. Keys never reach the renderer unmasked and never appear in logs.
  */
 import { safeStorage } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ModelRuntime, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
@@ -122,7 +122,7 @@ export class AuthService {
 		});
 		router.handle("models.json.save", (req) => {
 			const parsed: unknown = JSON.parse(req.content);
-			// Minimal shape validation before overwriting pi's file.
+			// Shape validation before overwriting pi's file.
 			if (
 				typeof parsed !== "object" ||
 				parsed === null ||
@@ -131,13 +131,32 @@ export class AuthService {
 			) {
 				throw new Error("models.json must contain a non-empty 'providers' object");
 			}
+			const providers = (parsed as { providers: Record<string, unknown> }).providers;
+			for (const [id, provider] of Object.entries(providers)) {
+				if (typeof provider !== "object" || provider === null) {
+					throw new Error(`providers.${id} must be an object`);
+				}
+				const p = provider as { baseUrl?: unknown; api?: unknown; models?: unknown };
+				if (typeof p.baseUrl !== "string" || p.baseUrl.length === 0) {
+					throw new Error(`providers.${id}.baseUrl must be a non-empty string`);
+				}
+				if (typeof p.api !== "string" || p.api.length === 0) {
+					throw new Error(`providers.${id}.api must be a non-empty string`);
+				}
+				if (!Array.isArray(p.models) || p.models.length === 0) {
+					throw new Error(`providers.${id}.models must be a non-empty array`);
+				}
+			}
 			const agentDir = getAgentDir();
 			mkdirSync(agentDir, { recursive: true });
-			writeFileSync(
-				path.join(agentDir, "models.json"),
-				JSON.stringify(parsed, null, 2) + "\n",
-				"utf8"
-			);
+			const target = path.join(agentDir, "models.json");
+			// Atomic write with one-generation backup.
+			if (existsSync(target)) {
+				copyFileSync(target, target + ".bak");
+			}
+			const tmp = target + ".tmp";
+			writeFileSync(tmp, JSON.stringify(parsed, null, 2) + "\n", "utf8");
+			renameSync(tmp, target);
 			return null;
 		});
 		router.handle("session.scoped_models.get", () => {
@@ -160,8 +179,16 @@ export class AuthService {
 		});
 		router.handle("packages.install", async (req) => {
 			const pm = this.makePackageManager();
-			await pm.installAndPersist(req.source);
-			return null;
+			const progress: string[] = [];
+			pm.setProgressCallback((event) => {
+				progress.push(`[${event.type}/${event.action}] ${event.message ?? event.source}`);
+			});
+			try {
+				await pm.installAndPersist(req.source);
+			} finally {
+				pm.setProgressCallback(undefined);
+			}
+			return { progress };
 		});
 		router.handle("packages.remove", async (req) => {
 			const pm = this.makePackageManager();

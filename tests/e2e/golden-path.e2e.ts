@@ -63,7 +63,7 @@ describe("golden path", () => {
 	}, 30_000);
 
 	it("creates an RPC session through the UI and streams a prompt end-to-end", async () => {
-		await page.getByText("+ RPC").first().click();
+		await page.getByText("RPC", { exact: true }).first().click();
 		await page.getByTestId("transcript").waitFor({ timeout: 30_000 });
 
 		await page.getByTestId("composer-input").fill("say hi");

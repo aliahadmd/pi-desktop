@@ -23,6 +23,7 @@ import { PiService } from "./pi/service";
 import { SidecarManager, type SearchHit } from "./sidecar/manager";
 import { StoreService } from "./store/service";
 import { FileBridge } from "./fs-bridge";
+import * as gitService from "./git-service";
 import { createDesktopTools } from "./pi/desktop-tools";
 import { PtyService } from "./pty-service";
 import { createLogger, type Logger } from "./services/logging";
@@ -129,6 +130,15 @@ app.whenReady()
 			return await bridge.readFile(req.filePath);
 		});
 		router.handle("workspace.roots", () => ({ roots: bridge.getRoots() }));
+		router.handle("git.context", async (req) => {
+			const ctx = await gitService.context(req.root);
+			return ctx.repo ? (ctx as unknown as import("../shared/pi").JsonValue) : null;
+		});
+		router.handle("workspace.reveal", async (req) => {
+			const scoped = await bridge.assertRealScoped(req.path);
+			shell.showItemInFolder(scoped);
+			return null;
+		});
 		router.handle("workspace.open_in_editor", async (req) => {
 			const scoped = await bridge.assertRealScoped(req.path);
 			const line = req.line;
@@ -153,16 +163,37 @@ app.whenReady()
 		});
 
 		// Resource text reader for skills/prompt templates (agent dir + project roots).
-		const agentDir = path.join(app.getPath("home"), ".pi/agent");
 		router.handle("resources.read_text", async (req) => {
+			// SECURITY: only markdown resource files are readable here. Never
+			// allow auth.json / models-store.json / arbitrary agent-dir files.
 			const resolved = path.resolve(req.path);
-			const allowed =
-				resolved.startsWith(agentDir + path.sep) ||
-				bridge.getRoots().some((root) => resolved.startsWith(path.resolve(root) + path.sep)) ||
-				resolved === agentDir;
-			if (!allowed) throw new Error(`path outside allowed resource locations: ${req.path}`);
+			if (!resolved.endsWith(".md")) {
+				throw new Error(`only .md resources are readable: ${req.path}`);
+			}
+			const realTarget = await (async () => {
+				try {
+					return await (await import("node:fs/promises")).realpath(resolved);
+				} catch {
+					throw new Error(`resource not accessible: ${req.path}`);
+				}
+			})();
+			const agentDirReal = await (async () => {
+				const agentDir = path.join(app.getPath("home"), ".pi/agent");
+				try {
+					return await (await import("node:fs/promises")).realpath(agentDir);
+				} catch {
+					return agentDir;
+				}
+			})();
+			const inAgentSkillsOrPrompts =
+				realTarget.startsWith(path.join(agentDirReal, "skills") + path.sep) ||
+				realTarget.startsWith(path.join(agentDirReal, "prompts") + path.sep);
+			if (!inAgentSkillsOrPrompts) {
+				// Fall back to project-root scoping (realpath-aware).
+				await bridge.assertRealScoped(realTarget);
+			}
 			const { readFile } = await import("node:fs/promises");
-			const content = await readFile(resolved, "utf8");
+			const content = await readFile(realTarget, "utf8");
 			return { content: content.slice(0, 200_000) };
 		});
 

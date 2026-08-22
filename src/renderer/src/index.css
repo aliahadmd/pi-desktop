@@ -5,10 +5,100 @@ body,
 #root {
 	height: 100%;
 	margin: 0;
-	background: #1a1a1e;
+	background: #141416;
 	color: #e7e7ea;
 	font-family:
 		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+}
+
+/* ---- Motion tokens (phase 3, ch14) ---- */
+:root {
+	--dur-fast: 120ms;
+	--dur-med: 200ms;
+	--dur-slow: 320ms;
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--sidebar-w: 260px;
+	--sidebar-rail-w: 56px;
+	--dock-min: 280px;
+	--dock-max: 520px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--dur-fast: 0.01ms;
+		--dur-med: 0.01ms;
+		--dur-slow: 0.01ms;
+	}
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* ---- Scrollbars (chapter 18 polish) ---- */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #2e2e33 transparent;
+}
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: #2e2e33;
+	border-radius: 4px;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: #45454c;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/* Shared transition helpers */
+.transition-standard {
+	transition: all var(--dur-med) var(--ease-standard);
+}
+.skeleton {
+	background: linear-gradient(
+		90deg,
+		rgba(255, 255, 255, 0.04) 25%,
+		rgba(255, 255, 255, 0.08) 50%,
+		rgba(255, 255, 255, 0.04) 75%
+	);
+	background-size: 200% 100%;
+	animation: skeleton-shimmer 1.4s infinite;
+}
+@keyframes skeleton-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+@keyframes block-enter {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+.animate-block-in {
+	animation: block-enter var(--dur-med) var(--ease-standard);
 }
 
 /* Draggable title-bar region (hiddenInset traffic lights) */

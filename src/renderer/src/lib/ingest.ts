@@ -53,7 +53,59 @@ export interface NoticeBlock {
 	text: string;
 	level: "info" | "warn" | "error";
 }
-export type Block = UserBlock | AssistantBlock | ToolBlock | NoticeBlock;
+export interface ToolGroupBlock {
+	kind: "toolGroup";
+	id: string;
+	tools: string[];
+	children: ToolBlock[];
+	status: "running" | "complete" | "error";
+}
+export type Block = UserBlock | AssistantBlock | ToolBlock | NoticeBlock | ToolGroupBlock;
+
+/**
+ * Fold consecutive tool blocks into groups (ch17). A group breaks when a
+ * non-tool block appears. Status: error if any child errored, running if any
+ * child running, else complete.
+ */
+export function groupToolRuns(blocks: Block[]): Block[] {
+	const out: Block[] = [];
+	let group: ToolGroupBlock | null = null;
+	const flush = (): void => {
+		if (group !== null) {
+			out.push(group);
+			group = null;
+		}
+	};
+	for (const block of blocks) {
+		if (block.kind === "tool") {
+			if (group === null) {
+				group = {
+					kind: "toolGroup",
+					id: `grp-${block.id}`,
+					tools: [],
+					children: [],
+					status: "running",
+				};
+			}
+			group.children.push(block);
+			group.tools.push(block.toolName);
+			continue;
+		}
+		flush();
+		out.push(block);
+	}
+	flush();
+	for (const b of out) {
+		if (b.kind === "toolGroup") {
+			b.status = b.children.some((c) => c.status === "running")
+				? "running"
+				: b.children.some((c) => c.status === "error")
+					? "error"
+					: "complete";
+		}
+	}
+	return out;
+}
 
 /** Mutable per-session ingestion context (kept outside React state). */
 export interface IngestContext {

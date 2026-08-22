@@ -187,7 +187,8 @@ export const useSessions = create<PiSessionsState>((set, get) => {
 				event.type === "backend_died" ||
 				event.type === "thinking_level_changed" ||
 				event.type === "session_info_changed" ||
-				event.type === "message_end"
+				event.type === "message_end" ||
+				event.type === "session_replaced"
 			) {
 				set((prev) => {
 					const s = prev.sessions[sessionId];
@@ -198,6 +199,29 @@ export const useSessions = create<PiSessionsState>((set, get) => {
 						next.queue = { steering: [...event.steering], followUp: [...event.followUp] };
 					}
 					if (event.type === "backend_died") next.dead = event.reason;
+					if (event.type === "session_replaced") {
+						// Re-hydrate transcript after fork/clone/switch/navigate.
+						next.hydrated = false;
+						void window.piDesktop
+							.invoke({ type: "session.messages", sessionId })
+							.then((r) => {
+								if (!r.ok) return;
+								const state = useSessions.getState();
+								const current = state.sessions[sessionId];
+								if (current === undefined) return;
+								useSessions.setState({
+									sessions: {
+										...state.sessions,
+										[sessionId]: {
+											...current,
+											blocks: hydrate(r.data.messages),
+											hydrated: true,
+											...(event.cwd !== undefined ? { cwd: event.cwd } : {}),
+										},
+									},
+								});
+							});
+					}
 					if (event.type === "thinking_level_changed") next.thinkingLevel = event.level;
 					if (event.type === "message_end") {
 						const message = event.message as {

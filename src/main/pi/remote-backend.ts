@@ -91,7 +91,7 @@ export class RemotePiBackend implements IPiBackend {
 	}
 	async bash(
 		_command: string,
-		_opts?: { excludeFromContext?: boolean }
+		_opts?: { excludeFromContext?: boolean; requestId?: string }
 	): Promise<JsonValue> {
 		throw notImplemented();
 	}
@@ -120,6 +120,9 @@ export class RemotePiBackend implements IPiBackend {
 		throw notImplemented();
 	}
 	async switchSession(_sessionPath: string): Promise<{ cancelled: boolean }> {
+		throw notImplemented();
+	}
+	async renameSession(_name: string): Promise<void> {
 		throw notImplemented();
 	}
 	async exportToJsonl(_outputPath?: string): Promise<string> {

@@ -64,10 +64,11 @@ describe("app shell", () => {
 		await page.getByText("No open sessions.").first().waitFor({ timeout: 10_000 });
 	});
 
-	it("switches to the sessions browser and back", async () => {
-		await page.getByTestId("tab-sessions").click();
+	it("opens the sessions browser sheet from the sidebar and closes it", async () => {
+		await page.getByTestId("sidebar-history").click();
+		await page.getByTestId("sheet-browse").waitFor({ timeout: 10_000 });
 		await page.getByText("Usage (14 days)").first().waitFor({ timeout: 10_000 });
-		await page.getByTestId("tab-chat").click();
+		await page.getByText("Close · Esc").first().click();
 		await page.getByText("No open sessions.").first().waitFor({ timeout: 10_000 });
 	});
 });

@@ -1,11 +1,18 @@
 /**
  * Transcript blocks: user, assistant (markdown + thinking + inline tool chips),
- * tool calls (live output, ANSI, diffs), notices.
+ * tool calls with live output/diffs, tool groups (ch17), notices.
  */
 import { memo, useState, type ReactNode } from "react";
 import Ansi from "ansi-to-react";
 import { Markdown } from "./Markdown";
-import type { AssistantBlock, Block, NoticeBlock, ToolBlock, UserBlock } from "../../lib/ingest";
+import type {
+	AssistantBlock,
+	Block,
+	NoticeBlock,
+	ToolBlock,
+	ToolGroupBlock,
+	UserBlock,
+} from "../../lib/ingest";
 
 function DiffView({ diff }: { diff: string }): ReactNode {
 	const lines = diff.split("\n");
@@ -106,7 +113,7 @@ function ThinkingPartView({ text }: { text: string }): ReactNode {
 	);
 }
 
-export const AssistantBlockView = memo(function AssistantBlockView({
+const AssistantBlockView = memo(function AssistantBlockView({
 	block,
 	onToolClick,
 }: {
@@ -114,6 +121,7 @@ export const AssistantBlockView = memo(function AssistantBlockView({
 	onToolClick: ((toolCallId: string) => void) | undefined;
 }) {
 	const streaming = block.status === "streaming";
+	const [copied, setCopied] = useState(false);
 	return (
 		<div className="px-4 py-2" data-kind="assistant" data-status={block.status}>
 			{block.parts.map((part, i) => {
@@ -145,15 +153,37 @@ export const AssistantBlockView = memo(function AssistantBlockView({
 			{block.status === "error" && (
 				<div className="text-xs text-red-400">Generation failed.</div>
 			)}
-			{block.status === "aborted" && (
-				<div className="text-xs text-amber-500">Aborted.</div>
-			)}
-			{!streaming && (block.usageTokens !== undefined || block.model !== undefined) && (
-				<div className="mt-1 font-mono text-[10px] text-neutral-600">
-					{[block.model, block.usageTokens !== undefined ? `${block.usageTokens} tok` : null,
-						block.usageCost !== undefined ? `$${block.usageCost.toFixed(4)}` : null]
-						.filter(Boolean)
-						.join(" · ")}
+			{block.status === "aborted" && <div className="text-xs text-amber-500">Aborted.</div>}
+			{!streaming && (
+				<div className="mt-1 flex items-center gap-2">
+					<button
+						type="button"
+						data-testid="copy-message"
+						onClick={() => {
+							const text = block.parts
+								.filter((p) => p.type === "text")
+								.map((p) => p.text)
+								.join("\n");
+							void navigator.clipboard.writeText(text).then(() => {
+								setCopied(true);
+								setTimeout(() => setCopied(false), 1200);
+							});
+						}}
+						className="text-[10px] text-neutral-600 hover:text-neutral-300"
+					>
+						{copied ? "✓ copied" : "copy"}
+					</button>
+					{(block.usageTokens !== undefined || block.model !== undefined) && (
+						<span className="font-mono text-[10px] text-neutral-600">
+							{[
+								block.model,
+								block.usageTokens !== undefined ? `${String(block.usageTokens)} tok` : null,
+								block.usageCost !== undefined ? `$${block.usageCost.toFixed(4)}` : null,
+							]
+								.filter(Boolean)
+								.join(" · ")}
+						</span>
+					)}
 				</div>
 			)}
 		</div>
@@ -174,6 +204,40 @@ const NoticeBlockView = memo(function NoticeBlockView({ block }: { block: Notice
 	);
 });
 
+const ToolGroupView = function ToolGroupView({
+	block,
+	renderChild,
+}: {
+	block: ToolGroupBlock;
+	renderChild(child: ToolBlock): ReactNode;
+}): ReactNode {
+	const [expanded, setExpanded] = useState(block.status === "running");
+	const running = block.children.some((c) => c.status === "running");
+	const errored = block.children.some((c) => c.status === "error");
+	const label =
+		block.tools.length === 1 ? (block.tools[0] ?? "tool") : `Ran ${block.children.length} commands`;
+	return (
+		<div data-kind="tool-group">
+			<button
+				type="button"
+				onClick={() => setExpanded((v) => !v)}
+				className="flex w-full items-center gap-2 px-4 py-1 text-left text-xs text-neutral-400 hover:bg-neutral-900/50"
+			>
+				<span className={running ? "text-blue-400" : errored ? "text-red-400" : "text-green-500"}>
+					{running ? "⟳" : errored ? "✗" : "✓"}
+				</span>
+				<span>
+					{expanded ? "▾" : "▸"}{" "}
+					{running ? label : `${label.charAt(0).toUpperCase()}${label.slice(1)}`}
+				</span>
+			</button>
+			{(expanded || running) && (
+				<div>{block.children.map((child) => renderChild(child))}</div>
+			)}
+		</div>
+	);
+};
+
 export function BlockView({
 	block,
 	onToolClick,
@@ -188,6 +252,13 @@ export function BlockView({
 			return <AssistantBlockView block={block} onToolClick={onToolClick} />;
 		case "tool":
 			return <ToolBlockView block={block} />;
+		case "toolGroup":
+			return (
+				<ToolGroupView
+					block={block}
+					renderChild={(child) => <BlockView block={child} onToolClick={onToolClick} />}
+				/>
+			);
 		case "notice":
 			return <NoticeBlockView block={block} />;
 	}

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 interface TrustEntry {
 	path: string;
-	decision: string;
+	decision: "trusted" | "denied" | "cleared";
 }
 
 export function TrustPanel(): React.JSX.Element {
@@ -22,15 +22,14 @@ export function TrustPanel(): React.JSX.Element {
 			setEntries(
 				Object.entries(raw)
 					.filter(([key]) => key !== "version")
-					.map(([path, value]) => ({
-						path,
-						decision:
-							typeof value === "string"
-								? value
-								: typeof value === "object" && value !== null
-									? String((value as { decision?: string }).decision ?? "unknown")
-									: "unknown",
-					}))
+					.map(([path, value]) => {
+						// pi's TrustFile: Record<string, boolean | null>
+						let decision: TrustEntry["decision"];
+						if (value === true) decision = "trusted";
+						else if (value === false) decision = "denied";
+						else decision = "cleared";
+						return { path, decision };
+					})
 			);
 		} else {
 			setError(trust.error.message);
@@ -48,10 +47,14 @@ export function TrustPanel(): React.JSX.Element {
 		void load();
 	}, [load]);
 
-	async function setDecision(entryPath: string, decision: string): Promise<void> {
+	async function setDecision(entryPath: string, decision: "trusted" | "denied" | "cleared"): Promise<void> {
 		const raw = await window.piDesktop.invoke({ type: "pi.config.read", name: "trust" });
 		if (!raw.ok) return;
-		const content = { ...(raw.data as Record<string, unknown>), [entryPath]: decision };
+		const content = { ...(raw.data as Record<string, unknown>) };
+		// pi's ProjectTrustDecision: boolean | null (null/absent = cleared)
+		if (decision === "trusted") content[entryPath] = true;
+		else if (decision === "denied") content[entryPath] = false;
+		else content[entryPath] = null;
 		const result = await window.piDesktop.invoke({
 			type: "pi.config.write_trust",
 			content: JSON.stringify(content),
@@ -106,9 +109,9 @@ export function TrustPanel(): React.JSX.Element {
 									</span>
 									<span
 										className={`rounded px-1.5 py-0.5 text-[9px] ${
-											entry.decision === "always"
+											entry.decision === "trusted"
 												? "bg-green-950 text-green-400"
-												: entry.decision === "never"
+												: entry.decision === "denied"
 													? "bg-red-950 text-red-400"
 													: "bg-neutral-800 text-neutral-400"
 										}`}
@@ -117,21 +120,21 @@ export function TrustPanel(): React.JSX.Element {
 									</span>
 									<button
 										type="button"
-										onClick={() => void setDecision(entry.path, "always")}
+										onClick={() => void setDecision(entry.path, "trusted")}
 										className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-green-950 hover:text-green-400"
 									>
 										Trust
 									</button>
 									<button
 										type="button"
-										onClick={() => void setDecision(entry.path, "never")}
+										onClick={() => void setDecision(entry.path, "denied")}
 										className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-red-950 hover:text-red-400"
 									>
 										Deny
 									</button>
 									<button
 										type="button"
-										onClick={() => void setDecision(entry.path, "")}
+										onClick={() => void setDecision(entry.path, "cleared")}
 										title="Clear decision (prompt again)"
 										className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
 									>

@@ -86,7 +86,7 @@ describe("fs bridge over IPC", () => {
 describe("workspace UI", () => {
 	it("opens a session through the UI and shows the dock", async () => {
 		// Drive the REAL flow: + RPC button → picker (stubbed via env) → session tab.
-		await page.getByText("+ RPC").first().click();
+		await page.getByText("RPC", { exact: true }).first().click();
 		await page.getByTestId("transcript").waitFor({ timeout: 30_000 });
 
 		await page.getByText("Files", { exact: true }).first().click();

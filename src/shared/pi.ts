@@ -197,7 +197,13 @@ export type PiEvent =
 	| { type: "ui_title"; title: string }
 	| { type: "ui_editor_text"; text: string }
 	| { type: "backend_died"; reason: string }
-	| { type: "backend_warning"; reason: string };
+	| { type: "backend_warning"; reason: string }
+	| {
+			type: "session_replaced";
+			cwd?: string;
+			sessionFile?: string;
+			sessionId?: string;
+	  };
 
 /** Events are routed per session. */
 export interface PiEventEnvelope {
@@ -369,6 +375,22 @@ export const sessionBashRequestSchema = Type.Object({
 	requestId: Type.String({ minLength: 1 }),
 	/** `!!` variant: keep output out of LLM context. */
 	excludeFromContext: Type.Optional(Type.Boolean()),
+});
+
+export const sessionRenameRequestSchema = Type.Object({
+	type: Type.Literal("session.rename"),
+	...sessionIdProp,
+	name: Type.String({ minLength: 1 }),
+});
+
+export const workspaceRevealRequestSchema = Type.Object({
+	type: Type.Literal("workspace.reveal"),
+	path: Type.String({ minLength: 1 }),
+});
+
+export const gitContextRequestSchema = Type.Object({
+	type: Type.Literal("git.context"),
+	root: Type.String({ minLength: 1 }),
 });
 
 export const piConfigWriteTrustRequestSchema = Type.Object({
@@ -710,6 +732,9 @@ export const piRequestSchemas = {
 	"packages.install": packagesInstallRequestSchema,
 	"packages.remove": packagesRemoveRequestSchema,
 	"resources.read_text": resourcesReadTextRequestSchema,
+	"session.rename": sessionRenameRequestSchema,
+	"workspace.reveal": workspaceRevealRequestSchema,
+	"git.context": gitContextRequestSchema,
 	"pi.config.write_trust": piConfigWriteTrustRequestSchema,
 	"pi.config.read": piConfigReadRequestSchema,
 	"workspace.open_in_editor": workspaceOpenInEditorRequestSchema,
@@ -790,9 +815,12 @@ export interface PiResponseMap {
 			installedPath?: string;
 		}>;
 	};
-	"packages.install": null;
+	"packages.install": { progress: string[] };
 	"packages.remove": null;
 	"resources.read_text": { content: string };
+	"session.rename": null;
+	"workspace.reveal": null;
+	"git.context": JsonValue | null;
 	"pi.config.write_trust": null;
 	"pi.config.read": JsonValue;
 	"workspace.open_in_editor": null;

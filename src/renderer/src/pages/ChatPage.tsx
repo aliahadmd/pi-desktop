@@ -2,7 +2,8 @@
  * Chat page: session tabs, transcript, workspace dock (files/review/commands/
  * tree), terminal toggle, composer, status bar, dialogs.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import type { PiImageInput } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
 import { Transcript } from "../components/chat/Transcript";
@@ -45,6 +46,39 @@ export default function ChatPage(): React.JSX.Element {
 	const [compactInstructions, setCompactInstructions] = useState("");
 	const [compacting, setCompacting] = useState(false);
 	const [insertedText, setInsertedText] = useState<string | null>(null);
+	const [dockWidth, setDockWidth] = useState(320);
+
+	useEffect(() => {
+		void window.piDesktop
+			.invoke({ type: "app.settings.get", key: "dockWidth" })
+			.then((r) => {
+				if (r.ok && typeof r.data === "number") setDockWidth(r.data);
+			})
+			.catch(() => {});
+	}, []);
+
+	useEffect(() => {
+		if (dockWidth === 320) return;
+		const t = setTimeout(() => {
+			void window.piDesktop.invoke({
+				type: "app.settings.set",
+				key: "dockWidth",
+				value: JSON.stringify(dockWidth),
+			});
+		}, 400);
+		return () => clearTimeout(t);
+	}, [dockWidth]);
+
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent): void => {
+			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+				e.preventDefault();
+				setTerminalOpen((v) => !v);
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, []);
 
 	const sessionList = Object.values(sessions);
 	const active = activeId !== null ? sessions[activeId] : undefined;
@@ -116,78 +150,56 @@ export default function ChatPage(): React.JSX.Element {
 
 	return (
 		<div className="flex h-full flex-col">
-			{/* Tab bar */}
-			<div className="flex h-9 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
-				{createError !== null && (
-					<span className="truncate rounded bg-red-950/70 px-2 py-0.5 text-[10px] text-red-300">
-						{createError}
+			{/* Open-session chips — only when more than one is open */}
+			{sessionList.length > 1 && (
+				<div className="flex h-8 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
+					{sessionList.map((s) => (
 						<button
+							key={s.id}
 							type="button"
-							onClick={() => setCreateError(null)}
-							className="ml-1 text-red-400"
-						>
-							×
-						</button>
-					</span>
-				)}
-				{sessionList.map((s) => (
-					<button
-						key={s.id}
-						type="button"
-						onClick={() => setActive(s.id)}
-						className={`group flex items-center gap-1.5 rounded-t px-3 py-1.5 text-xs ${
-							s.id === activeId
-								? "bg-neutral-800 text-neutral-100"
-								: "text-neutral-500 hover:text-neutral-300"
-						}`}
-					>
-						<span
-							className={`h-1.5 w-1.5 rounded-full ${
-								s.dead !== undefined
-									? "bg-red-500"
-									: s.phase === "idle"
-										? "bg-neutral-600"
-										: "bg-blue-500 animate-pulse"
+							onClick={() => setActive(s.id)}
+							className={`group flex items-center gap-1.5 rounded px-2 py-1 text-[11px] transition-standard ${
+								s.id === activeId
+									? "bg-neutral-800 text-neutral-100"
+									: "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-300"
 							}`}
-						/>
-						{s.cwd.split("/").pop() ?? s.cwd}
-						<span
-							role="button"
-							tabIndex={0}
-							onClick={(e) => {
-								e.stopPropagation();
-								closeTab(s.id);
-							}}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") closeTab(s.id);
-							}}
-							className="ml-1 hidden text-neutral-600 hover:text-neutral-300 group-hover:inline"
 						>
-							×
-						</span>
-					</button>
-				))}
-				<button
-					type="button"
-					disabled={creating}
-					onClick={() => void newSession("sdk")}
-					className="rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-40"
-				>
-					+ SDK
-				</button>
-				<button
-					type="button"
-					disabled={creating}
-					onClick={() => void newSession("rpc")}
-					className="rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-40"
-				>
-					+ RPC
-				</button>
-			</div>
-
+							<span
+								className={`h-1.5 w-1.5 rounded-full ${
+									s.dead !== undefined
+										? "bg-red-500"
+										: s.phase === "idle"
+											? "bg-neutral-600"
+											: "bg-blue-500 animate-pulse"
+								}`}
+							/>
+							{s.cwd.split("/").pop() ?? s.cwd}
+							<span
+								role="button"
+								tabIndex={0}
+								onClick={(e) => {
+									e.stopPropagation();
+									closeTab(s.id);
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") closeTab(s.id);
+								}}
+								className="ml-1 text-neutral-600 hover:text-neutral-300"
+							>
+								×
+							</span>
+						</button>
+					))}
+				</div>
+			)}
 			{active === undefined ? (
 				<div className="flex flex-1 flex-col items-center justify-center gap-3">
 					<p className="text-sm text-neutral-400">No open sessions.</p>
+					{createError !== null && (
+						<p className="max-w-md rounded border border-red-900 bg-red-950/50 px-3 py-1.5 text-xs text-red-300">
+							{createError}
+						</p>
+					)}
 					<div className="flex gap-2">
 						<button
 							type="button"
@@ -209,12 +221,40 @@ export default function ChatPage(): React.JSX.Element {
 				</div>
 			) : (
 				<>
-					<div className="flex min-h-0 flex-1">
+					<div className="flex min-h-0 flex-1 overflow-hidden">
 						<div className="flex min-w-0 flex-1 flex-col">
 							<Transcript blocks={active.blocks} phase={active.phase} />
 						</div>
 						{dockTab !== null && (
-							<div className="w-72 shrink-0 overflow-hidden border-l border-neutral-800">
+							<div
+								className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-blue-900/60"
+								data-testid="dock-resize"
+								onPointerDown={(e) => {
+									e.currentTarget.setPointerCapture(e.pointerId);
+									const startX = e.clientX;
+									const startW = dockWidth;
+									const move = (ev: PointerEvent): void => {
+										const next = Math.min(520, Math.max(280, startW - (ev.clientX - startX)));
+										setDockWidth(next);
+									};
+									const up = (): void => {
+										window.removeEventListener("pointermove", move);
+										window.removeEventListener("pointerup", up);
+									};
+									window.addEventListener("pointermove", move);
+									window.addEventListener("pointerup", up);
+								}}
+							/>
+						)}
+						<AnimatePresence initial={false}>
+						{dockTab !== null && (
+							<motion.div
+								initial={{ width: 0, opacity: 0 }}
+								animate={{ width: `${dockWidth}px`, opacity: 1 }}
+								exit={{ width: 0, opacity: 0 }}
+								transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }}
+								className="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-neutral-800"
+							>
 								<div className="flex h-8 items-center gap-1 border-b border-neutral-800 px-2">
 									{(["files", "review", "commands", "tree"] as const).map((t) => (
 										<button
@@ -238,7 +278,7 @@ export default function ChatPage(): React.JSX.Element {
 										×
 									</button>
 								</div>
-								<div className="h-[calc(100%-2rem)] overflow-y-auto">
+								<div className="min-h-0 flex-1 overflow-y-auto">
 									{dockTab === "files" && <FileExplorer cwd={active.cwd} />}
 									{dockTab === "review" && <ReviewQueue blocks={active.blocks} />}
 									{dockTab === "commands" && (
@@ -282,15 +322,24 @@ export default function ChatPage(): React.JSX.Element {
 										/>
 									)}
 								</div>
-							</div>
+								</motion.div>
 						)}
+						</AnimatePresence>
 					</div>
 
-					{terminalOpen && (
-						<div className="h-56 shrink-0 border-t border-neutral-800 bg-black">
-							<TerminalPanel cwd={active.cwd} />
-						</div>
-					)}
+					<AnimatePresence initial={false}>
+						{terminalOpen && (
+							<motion.div
+								initial={{ height: 0 }}
+								animate={{ height: 224 }}
+								exit={{ height: 0 }}
+								transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }}
+								className="shrink-0 overflow-hidden border-t border-neutral-800 bg-black"
+							>
+								<TerminalPanel cwd={active.cwd} />
+							</motion.div>
+						)}
+					</AnimatePresence>
 
 					{/* Toolbar */}
 					<div className="flex items-center gap-2 border-t border-neutral-800 px-3 py-1">
@@ -362,7 +411,14 @@ export default function ChatPage(): React.JSX.Element {
 											: { type: "session.export_jsonl", sessionId: active.id }
 									)
 									.then((r) => {
-										if (!r.ok) pushErrorNotice(active.id, r.error.message);
+										if (!r.ok) {
+											pushErrorNotice(active.id, r.error.message);
+										} else {
+											const exported = r.data as { path: string };
+											useSessions
+												.getState()
+												.pushNotice(active.id, `Exported to ${exported.path}`, "info");
+										}
 									});
 							}}
 							defaultValue=""
@@ -394,6 +450,8 @@ export default function ChatPage(): React.JSX.Element {
 						onInsertHandled={() => setInsertedText(null)}
 						streaming={active.phase !== "idle"}
 						queueCount={active.queue.steering.length + active.queue.followUp.length}
+						projectRoot={active.cwd}
+						onOpenPalette={() => setDockTab("commands")}
 						onSend={send}
 						onBash={runBash}
 						onAbort={() => {

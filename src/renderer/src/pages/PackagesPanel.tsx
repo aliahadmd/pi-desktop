@@ -41,11 +41,15 @@ export function PackagesPanel(): React.JSX.Element {
 				type: "packages.install",
 				source: pendingSource,
 			});
-			setMessage(
-				result.ok
-					? `Installed ${pendingSource}. Restart sessions to load its resources.`
-					: `Install failed: ${result.error.message}`
-			);
+			if (result.ok) {
+				const steps = (result.data as { progress?: string[] }).progress ?? [];
+				setMessage(
+					`Installed ${pendingSource}. Restart sessions to load its resources.` +
+						(steps.length > 0 ? ` (${steps.length} steps)` : "")
+				);
+			} else {
+				setMessage(`Install failed: ${result.error.message}`);
+			}
 			await load();
 			setSource("");
 		} finally {

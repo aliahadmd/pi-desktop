@@ -265,12 +265,14 @@ export class RpcPiBackend implements IPiBackend {
 
 	async bash(
 		command: string,
-		opts?: { excludeFromContext?: boolean }
+		opts?: { excludeFromContext?: boolean; requestId?: string }
 	): Promise<JsonValue> {
 		if (opts?.excludeFromContext === true) {
 			throw new Error("context-excluded bash is SDK-only");
 		}
-		const data = await this.request({ type: "bash", command });
+		const commandPayload: Record<string, unknown> = { type: "bash", command };
+		if (opts?.requestId !== undefined) commandPayload.id = opts.requestId;
+		const data = await this.request(commandPayload);
 		return safeJson(data);
 	}
 
@@ -283,6 +285,7 @@ export class RpcPiBackend implements IPiBackend {
 			text?: string;
 			cancelled: boolean;
 		};
+		void this.notifyReplaced().catch(() => {});
 		return data;
 	}
 
@@ -299,8 +302,8 @@ export class RpcPiBackend implements IPiBackend {
 	}
 
 	async getTree(): Promise<JsonValue> {
-		const data = await this.request({ type: "get_tree" });
-		return safeJson(data);
+		const data = (await this.request({ type: "get_tree" })) as { tree?: unknown };
+		return safeJson(data.tree ?? []);
 	}
 
 	async getEntries(since?: string): Promise<{ entries: JsonValue[]; leafId: string | null }> {
@@ -315,6 +318,7 @@ export class RpcPiBackend implements IPiBackend {
 
 	async clone(): Promise<{ cancelled: boolean }> {
 		const data = (await this.request({ type: "clone" })) as { cancelled: boolean };
+		await this.notifyReplaced();
 		return data;
 	}
 
@@ -322,7 +326,27 @@ export class RpcPiBackend implements IPiBackend {
 		const data = (await this.request({ type: "switch_session", sessionPath })) as {
 			cancelled: boolean;
 		};
+		await this.notifyReplaced();
 		return data;
+	}
+
+	/** Session replacement signal for the renderer (state fetched best-effort). */
+	private async notifyReplaced(): Promise<void> {
+		let cwdInfo: string | undefined;
+		try {
+			const state = (await this.getState()) as PiSessionState;
+			cwdInfo = state.sessionFile;
+		} catch {
+			cwdInfo = undefined;
+		}
+		this.options.onEvent({
+			type: "session_replaced",
+			...(cwdInfo !== undefined ? { sessionFile: cwdInfo } : {}),
+		});
+	}
+
+	async renameSession(name: string): Promise<void> {
+		await this.request({ type: "set_session_name", name });
 	}
 
 	async exportToJsonl(outputPath?: string): Promise<string> {

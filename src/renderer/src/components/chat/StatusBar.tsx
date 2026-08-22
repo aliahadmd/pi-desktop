@@ -28,6 +28,7 @@ export function StatusBar({
 
 	// Clamp the dropdown to the current session's supported levels.
 	useEffect(() => {
+		if (session.model === undefined) return; // levels are model-dependent
 		let cancelled = false;
 		void window.piDesktop
 			.invoke({ type: "session.thinking_levels", sessionId: session.id })

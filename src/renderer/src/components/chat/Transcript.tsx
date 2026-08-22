@@ -1,23 +1,24 @@
 /**
- * Virtualized transcript with stick-to-bottom streaming behavior.
+ * Virtualized transcript with stick-to-bottom streaming and tool grouping.
  */
 import { useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { Block } from "../../lib/ingest";
+import { groupToolRuns, type Block } from "../../lib/ingest";
 import { BlockView } from "./Blocks";
 
 export function Transcript({
-	blocks,
+	blocks: rawBlocks,
 	phase,
 }: {
 	blocks: Block[];
 	phase: "idle" | "streaming" | "compacting" | "retrying";
 }): React.JSX.Element {
+	const parentRef = useRef<HTMLDivElement>(null);
+	const stickToBottom = useRef(true);
+	const blocks = groupToolRuns(rawBlocks);
 	const noopToolClick = (toolCallId: string): void => {
 		void toolCallId;
 	};
-	const parentRef = useRef<HTMLDivElement>(null);
-	const stickToBottom = useRef(true);
 
 	const virtualizer = useVirtualizer({
 		count: blocks.length,
@@ -52,22 +53,26 @@ export function Transcript({
 				</div>
 			) : (
 				<div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-					{virtualizer.getVirtualItems().map((item) => (
-						<div
-							key={String(blocks[item.index]?.id ?? item.key)}
-							data-index={item.index}
-							ref={virtualizer.measureElement}
-							style={{
-								position: "absolute",
-								top: 0,
-								left: 0,
-								width: "100%",
-								transform: `translateY(${item.start}px)`,
-							}}
-						>
-							<BlockView block={blocks[item.index] as Block} onToolClick={noopToolClick} />
-						</div>
-					))}
+					{virtualizer.getVirtualItems().map((item) => {
+						const block = blocks[item.index] as Block;
+						return (
+							<div
+								key={`${block.kind}-${String(item.key)}`}
+								data-index={item.index}
+								ref={virtualizer.measureElement}
+								style={{
+									position: "absolute",
+									top: 0,
+									left: 0,
+									width: "100%",
+									transform: `translateY(${item.start}px)`,
+									animation: "block-enter var(--dur-med) var(--ease-standard)",
+								}}
+							>
+								<BlockView block={block} onToolClick={noopToolClick} />
+							</div>
+						);
+					})}
 				</div>
 			)}
 		</div>

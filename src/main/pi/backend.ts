@@ -85,7 +85,7 @@ export interface IPiBackend {
 
 	bash(
 		command: string,
-		opts?: { excludeFromContext?: boolean }
+		opts?: { excludeFromContext?: boolean; requestId?: string }
 	): Promise<JsonValue>;
 	abortBash(): Promise<void>;
 
@@ -103,6 +103,8 @@ export interface IPiBackend {
 	clone(): Promise<{ cancelled: boolean }>;
 	/** Replace the active session with another session file. */
 	switchSession(sessionPath: string): Promise<{ cancelled: boolean }>;
+	/** Set the display name of the active session. */
+	renameSession(name: string): Promise<void>;
 	exportToJsonl(outputPath?: string): Promise<string>;
 	respondUi(response: UiDialogResponse): Promise<void>;
 }

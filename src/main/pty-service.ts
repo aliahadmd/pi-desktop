@@ -35,8 +35,13 @@ export class PtyService {
 
 	register(): void {
 		ipcMain.on("pty:create", (event, req: PtyCreateRequest) => {
-			void this.create(String(req.id), String(req.cwd), Number(req.cols) || 80, Number(req.rows) || 24);
-			event; // ack via data events
+			const id = String(req.id);
+			if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+				this.log("warn", `pty:create rejected invalid id pattern`);
+				return;
+			}
+			void this.create(id, String(req.cwd), Number(req.cols) || 80, Number(req.rows) || 24);
+			void event; // ack arrives via data events
 		});
 		ipcMain.on("pty:write", (_event, req: { id: string; data: string }) => {
 			this.terms.get(String(req.id))?.write(String(req.data));
@@ -73,12 +78,18 @@ export class PtyService {
 			}
 			const pty = await import("node-pty");
 			const shell = process.env.SHELL || "/bin/zsh";
+			// posix_spawnp fails if env contains undefined values — sanitize.
+			const env: Record<string, string> = {};
+			for (const [key, value] of Object.entries(process.env)) {
+				if (value !== undefined) env[key] = value;
+			}
+			env.TERM = "xterm-256color";
 			const term = pty.spawn(shell, ["-l"], {
 				name: "xterm-256color",
 				cols,
 				rows,
 				cwd: scoped,
-				env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
+				env,
 			});
 			this.terms.set(id, term);
 			term.onData((data) => send(data));

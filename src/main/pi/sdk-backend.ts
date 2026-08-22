@@ -292,10 +292,11 @@ export class SdkPiBackend implements IPiBackend {
 
 	async bash(
 		command: string,
-		opts?: { excludeFromContext?: boolean }
+		opts?: { excludeFromContext?: boolean; requestId?: string }
 	): Promise<JsonValue> {
 		const result = await this.requireSession().executeBash(command, undefined, {
 			...(opts?.excludeFromContext === true ? { excludeFromContext: true } : {}),
+			...(opts?.requestId !== undefined ? { id: opts.requestId } : {}),
 		});
 		return toJson(result);
 	}
@@ -324,6 +325,7 @@ export class SdkPiBackend implements IPiBackend {
 		if (result.aborted === true) {
 			throw new Error("navigation aborted by extension");
 		}
+		void this.notifyReplaced().catch(() => {});
 		return result.editorText === undefined
 			? { cancelled: result.cancelled }
 			: { text: result.editorText, cancelled: result.cancelled };
@@ -337,10 +339,9 @@ export class SdkPiBackend implements IPiBackend {
 	async getEntries(since?: string): Promise<{ entries: JsonValue[]; leafId: string | null }> {
 		const manager = this.requireSession().sessionManager;
 		const entries = manager.getEntries();
-		const startIndex = since === undefined ? 0 : entries.findIndex((e) => e.id === since) + 1;
-		if (since !== undefined && startIndex === 0 && entries[0]?.id !== since && entries.length > 0) {
-			// cursor not found — treat as full sync from the start
-		}
+		const startIndex =
+			since === undefined ? 0 : entries.findIndex((e) => e.id === since) + 1;
+		// Cursor not found → startIndex 0 → full resync from the start.
 		const slice = since === undefined ? entries : entries.slice(Math.max(startIndex, 0));
 		return {
 			entries: slice.map((e) => toJson(e)),
@@ -351,16 +352,37 @@ export class SdkPiBackend implements IPiBackend {
 	async clone(): Promise<{ cancelled: boolean }> {
 		if (this.runtime === null) throw new Error("runtime not available");
 		const leaf = this.runtime.session.sessionManager.getLeafEntry();
-		const result = await this.runtime.fork(leaf?.id ?? "", { position: "at" });
-		await this.bindToSession(this.runtime.session);
+		if (leaf === undefined) {
+			throw new Error("nothing to clone: session has no entries yet");
+		}
+		const result = await this.runtime.fork(leaf.id, { position: "at" });
+		await this.notifyReplaced();
 		return { cancelled: result.cancelled };
 	}
 
 	async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
 		if (this.runtime === null) throw new Error("runtime not available");
 		const result = await this.runtime.switchSession(sessionPath);
-		await this.bindToSession(this.runtime.session);
+		await this.notifyReplaced();
 		return { cancelled: result.cancelled };
+	}
+
+	/**
+	 * After a session replacement, tell the renderer to re-hydrate and report
+	 * the fresh identity/cwd so scoping (roots, dock header) stays correct.
+	 */
+	private async notifyReplaced(): Promise<void> {
+		const session = this.requireSession();
+		this.options.onEvent({
+			type: "session_replaced",
+			sessionId: session.sessionId,
+			...(session.sessionFile !== undefined ? { sessionFile: session.sessionFile } : {}),
+			cwd: this.options.cwd,
+		});
+	}
+
+	async renameSession(name: string): Promise<void> {
+		this.requireSession().setSessionName(name);
 	}
 
 	async exportToJsonl(outputPath?: string): Promise<string> {

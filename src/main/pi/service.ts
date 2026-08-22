@@ -150,6 +150,7 @@ export class PiService {
 			try {
 				return await this.backend(req.sessionId).bash(req.command, {
 					...(req.excludeFromContext === true ? { excludeFromContext: true } : {}),
+					...(req.requestId !== undefined ? { requestId: req.requestId } : {}),
 				});
 			} finally {
 				// Complete the streaming bash block in the transcript.
@@ -185,10 +186,17 @@ export class PiService {
 		router.handle("session.entries", async (req) =>
 			this.backend(req.sessionId).getEntries(req.since)
 		);
-		router.handle("session.clone", async (req) => this.backend(req.sessionId).clone());
-		router.handle("session.switch", async (req) =>
-			this.backend(req.sessionId).switchSession(req.sessionPath)
-		);
+		router.handle("session.clone", async (req) => {
+			const result = await this.backend(req.sessionId).clone();
+			await this.notifySessionOpened(req.sessionId);
+			return result;
+		});
+		router.handle("session.switch", async (req) => {
+			const result = await this.backend(req.sessionId).switchSession(req.sessionPath);
+			// Re-register scoping (roots, dock cwd) for the switched-to project.
+			await this.notifySessionOpened(req.sessionId);
+			return result;
+		});
 		router.handle("session.navigate", async (req) => {
 			const backend = this.backend(req.sessionId);
 			return backend.navigateTree(req.entryId, {
@@ -197,6 +205,10 @@ export class PiService {
 					? { customInstructions: req.customInstructions }
 					: {}),
 			});
+		});
+		router.handle("session.rename", async (req) => {
+			await this.backend(req.sessionId).renameSession(req.name);
+			return null;
 		});
 		router.handle("session.export_jsonl", async (req) => {
 			const exported = await this.backend(req.sessionId).exportToJsonl(req.outputPath);
@@ -232,6 +244,22 @@ export class PiService {
 	}
 
 	// ---------------------------------------------------------------------------
+
+	/** Re-fire onSessionOpened observers after an in-place replacement. */
+	private async notifySessionOpened(appSessionId: string): Promise<void> {
+		const entry = this.sessions.get(appSessionId);
+		if (entry === undefined) return;
+		const state = await entry.backend.getState().catch(() => undefined);
+		for (const hooks of this.hooksList) {
+			hooks.onSessionOpened?.({
+				appSessionId,
+				piSessionId: state?.sessionId,
+				sessionFile: state?.sessionFile ?? entry.backend.getSessionFile(),
+				cwd: entry.cwd,
+				backend: entry.backend.kind,
+			});
+		}
+	}
 
 	private backend(sessionId: string): IPiBackend {
 		const entry = this.sessions.get(sessionId);

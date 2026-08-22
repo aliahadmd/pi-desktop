@@ -1,22 +1,27 @@
 /**
- * App shell: Chat / Sessions tabs. Binds the global pi event stream once.
+ * App shell v2 (phase 3): Sidebar | Center | Dock three-column layout.
+ * Sheets for Models/Settings/Trust/Browse-all; motion throughout.
  */
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
 import ChatPage from "./pages/ChatPage";
-import { SessionsPage } from "./pages/SessionsPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { Onboarding } from "./pages/Onboarding";
 import { TrustPanel } from "./pages/TrustPanel";
+import { SessionsPage } from "./pages/SessionsPage";
+import { Onboarding } from "./pages/Onboarding";
+import { Sheet } from "./components/shell/Sheet";
+import { Sidebar } from "./components/shell/Sidebar";
 
-type Tab = "chat" | "sessions" | "models" | "settings" | "trust";
+type SheetKind = "models" | "settings" | "trust" | "browse" | null;
 
 export default function App(): React.JSX.Element {
-	const [tab, setTab] = useState<Tab>("chat");
 	const [pingOk, setPingOk] = useState(false);
 	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [onboardingChecked, setOnboardingChecked] = useState(false);
+	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+	const [sheet, setSheet] = useState<SheetKind>(null);
 
 	useEffect(() => bindPiEvents(), []);
 
@@ -24,123 +29,130 @@ export default function App(): React.JSX.Element {
 		void window.piDesktop.invoke({ type: "ping" }).then((r) => {
 			if (r.ok) setPingOk(true);
 		});
-		// First-run check: any configured provider auth?
 		void window.piDesktop.invoke({ type: "auth.providers" }).then((r) => {
 			setOnboardingChecked(true);
 			if (!r.ok) return;
-			const anyConfigured = (r.data as { providers: Array<{ configured: boolean }> }).providers.some(
-				(p) => p.configured
-			);
+			const anyConfigured = (
+				r.data as { providers: Array<{ configured: boolean }> }
+			).providers.some((p) => p.configured);
 			if (!anyConfigured) setShowOnboarding(true);
 		});
 	}, []);
 
+	// ⌘\ toggles sidebar collapse.
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent): void => {
+			if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+				e.preventDefault();
+				setSidebarCollapsed((v) => !v);
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, []);
+
+	// Responsive: auto-collapse the sidebar on narrow windows (never auto-expand).
+	useEffect(() => {
+		const check = (): void => {
+			if (window.innerWidth < 900) setSidebarCollapsed(true);
+		};
+		check();
+		window.addEventListener("resize", check);
+		return () => window.removeEventListener("resize", check);
+	}, []);
+
 	return (
-		<div className="flex h-full flex-col">
-			<header className="titlebar-drag flex h-12 shrink-0 items-center px-20">
-				<h1 className="text-sm font-semibold tracking-wide text-neutral-300">
-					Pi Desktop
-				</h1>
-				<nav className="titlebar-nodrag ml-6 flex gap-1">
-					<button
-						type="button"
-						onClick={() => setTab("chat")}
-						data-testid="tab-chat"
-						className={`rounded px-3 py-1 text-xs ${
-							tab === "chat"
-								? "bg-neutral-800 text-neutral-100"
-								: "text-neutral-500 hover:text-neutral-300"
-						}`}
-					>
-						Chat
-					</button>
-					<button
-						type="button"
-						onClick={() => setTab("sessions")}
-						data-testid="tab-sessions"
-						className={`rounded px-3 py-1 text-xs ${
-							tab === "sessions"
-								? "bg-neutral-800 text-neutral-100"
-								: "text-neutral-500 hover:text-neutral-300"
-						}`}
-					>
-						Sessions
-					</button>
-					<button
-						type="button"
-						onClick={() => setTab("models")}
-						data-testid="tab-models"
-						className={`rounded px-3 py-1 text-xs ${
-							tab === "models"
-								? "bg-neutral-800 text-neutral-100"
-								: "text-neutral-500 hover:text-neutral-300"
-						}`}
-					>
-						Models
-					</button>
-					<button
-						type="button"
-						onClick={() => setTab("settings")}
-						data-testid="tab-settings"
-						className={`rounded px-3 py-1 text-xs ${
-							tab === "settings"
-								? "bg-neutral-800 text-neutral-100"
-								: "text-neutral-500 hover:text-neutral-300"
-						}`}
-					>
-						Settings
-					</button>
-					<button
-						type="button"
-						onClick={() => setTab("trust")}
-						data-testid="tab-trust"
-						className={`rounded px-3 py-1 text-xs ${
-							tab === "trust"
-								? "bg-neutral-800 text-neutral-100"
-								: "text-neutral-500 hover:text-neutral-300"
-						}`}
-					>
-						Trust
-					</button>
-				</nav>
-				{pingOk && (
-					<span className="ml-auto font-mono text-[10px] text-neutral-600">ipc ok</span>
-				)}
-			</header>
-			<main className="relative flex flex-1 flex-col overflow-hidden">
-				{tab === "chat" ? (
-					<ChatPage />
-				) : tab === "sessions" ? (
-					<SessionsPage
-						onResume={(response) => {
+		<div className="flex h-full overflow-hidden">
+			<AnimatePresence initial={false} mode="wait">
+				<motion.div
+					key={sidebarCollapsed ? "rail" : "full"}
+					initial={false}
+					animate={{
+						width: sidebarCollapsed ? "var(--sidebar-rail-w)" : "var(--sidebar-w)",
+					}}
+					transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+					className="shrink-0 overflow-hidden"
+				>
+					<Sidebar
+						collapsed={sidebarCollapsed}
+						onOpenSession={(response) => {
 							useSessions.getState().open(response);
-							setTab("chat");
+							setSheet(null);
 						}}
+						onOpenSheet={(kind) => setSheet(kind)}
 					/>
-				) : tab === "models" ? (
-					<ModelsPage
-						onUseWithSession={(provider, modelId) => {
-							void window.piDesktop.invoke({
-								type: "session.default_model",
-								provider,
-								modelId,
-							});
-							setTab("chat");
-						}}
-					/>
-				) : tab === "trust" ? (
-					<TrustPanel />
-				) : (
-					<SettingsPage />
-				)}
-				{showOnboarding && onboardingChecked && (
-					<Onboarding
-						onDone={() => {
-							setShowOnboarding(false);
-						}}
-					/>
+				</motion.div>
+			</AnimatePresence>
+
+			<main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+				<div className="titlebar-drag flex h-3 shrink-0 items-center" />
+
+				<AnimatePresence>
+					{showOnboarding && onboardingChecked && (
+						<Onboarding
+							onDone={() => {
+								setShowOnboarding(false);
+							}}
+						/>
+					)}
+				</AnimatePresence>
+
+				<ChatPage />
+
+				{pingOk && (
+					<span className="pointer-events-none absolute right-2 top-0 font-mono text-[9px] text-neutral-700">
+						ipc ok
+					</span>
 				)}
 			</main>
+
+			{/* Sheets */}
+			<Sheet
+				open={sheet === "models"}
+				title="Models"
+				onClose={() => setSheet(null)}
+				testId="sheet-models"
+			>
+				<ModelsPage
+					onUseWithSession={(provider, modelId) => {
+						void window.piDesktop.invoke({
+							type: "session.default_model",
+							provider,
+							modelId,
+						});
+						setSheet(null);
+					}}
+				/>
+			</Sheet>
+			<Sheet
+				open={sheet === "settings"}
+				title="Settings"
+				onClose={() => setSheet(null)}
+				testId="sheet-settings"
+			>
+				<SettingsPage />
+			</Sheet>
+			<Sheet
+				open={sheet === "trust"}
+				title="Project trust & keybindings"
+				onClose={() => setSheet(null)}
+				testId="sheet-trust"
+			>
+				<TrustPanel />
+			</Sheet>
+			<Sheet
+				open={sheet === "browse"}
+				title="All sessions"
+				onClose={() => setSheet(null)}
+				testId="sheet-browse"
+			>
+				<SessionsPage
+					onResume={(response) => {
+						useSessions.getState().open(response);
+						setSheet(null);
+					}}
+				/>
+			</Sheet>
 		</div>
 	);
 }
