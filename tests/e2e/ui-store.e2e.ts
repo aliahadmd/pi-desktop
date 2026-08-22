@@ -59,8 +59,8 @@ async function invoke(request: Record<string, unknown>): Promise<{
 }
 
 describe("app shell", () => {
-	it("renders both tabs and defaults to chat", async () => {
-		await expect(page.getByTestId("tab-chat")).toBeDefined();
+	it("renders the sidebar shell and defaults to chat", async () => {
+		await page.getByTestId("sidebar").waitFor({ timeout: 10_000 });
 		await page.getByText("No open sessions.").first().waitFor({ timeout: 10_000 });
 	});
 

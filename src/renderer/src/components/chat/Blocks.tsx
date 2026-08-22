@@ -156,23 +156,25 @@ const AssistantBlockView = memo(function AssistantBlockView({
 			{block.status === "aborted" && <div className="text-xs text-amber-500">Aborted.</div>}
 			{!streaming && (
 				<div className="mt-1 flex items-center gap-2">
-					<button
-						type="button"
-						data-testid="copy-message"
-						onClick={() => {
-							const text = block.parts
-								.filter((p) => p.type === "text")
-								.map((p) => p.text)
-								.join("\n");
-							void navigator.clipboard.writeText(text).then(() => {
-								setCopied(true);
-								setTimeout(() => setCopied(false), 1200);
-							});
-						}}
-						className="text-[10px] text-neutral-600 hover:text-neutral-300"
-					>
-						{copied ? "✓ copied" : "copy"}
-					</button>
+					{block.parts.some((p) => p.type === "text" && p.text.length > 0) && (
+						<button
+							type="button"
+							data-testid="copy-message"
+							onClick={() => {
+								const text = block.parts
+									.filter((p) => p.type === "text")
+									.map((p) => p.text)
+									.join("\n");
+								void navigator.clipboard.writeText(text).then(() => {
+									setCopied(true);
+									setTimeout(() => setCopied(false), 1200);
+								});
+							}}
+							className="text-[10px] text-neutral-600 hover:text-neutral-300"
+						>
+							{copied ? "✓ copied" : "copy"}
+						</button>
+					)}
 					{(block.usageTokens !== undefined || block.model !== undefined) && (
 						<span className="font-mono text-[10px] text-neutral-600">
 							{[
