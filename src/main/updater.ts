@@ -18,6 +18,14 @@ export function setupAutoUpdater(logger: Logger): void {
 		return;
 	}
 
+	// Auto-update is disabled until this project has its own signed release feed.
+	// Without this guard, autoDownload would install whatever the configured
+	// publish target serves — see docs/RELEASE.md.
+	if (process.env.PI_DESKTOP_ENABLE_UPDATER !== "1") {
+		logger.info("main", "auto-update disabled (no signed release feed configured)");
+		return;
+	}
+
 	autoUpdater.logger = null; // we do our own logging
 	autoUpdater.autoDownload = true;
 	autoUpdater.autoInstallOnAppQuit = true;

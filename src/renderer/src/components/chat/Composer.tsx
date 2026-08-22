@@ -10,6 +10,8 @@ interface Attachment {
 	name: string;
 	size: number;
 	kind: "image" | "text" | "path-ref";
+	/** Absolute path, when Electron can resolve it (drag-drop / paste). */
+	fullPath?: string;
 	imageData?: string;
 	mimeType?: string;
 	textContent?: string;
@@ -39,8 +41,6 @@ export function Composer({
 	onOpenReview(): void;
 	projectRoot: string | null;
 	modelName?: string | undefined;
-	permissionMode?: "full" | "confirm" | "readonly";
-	onPermissionModeChange?(mode: "full" | "confirm" | "readonly"): void;
 }): React.JSX.Element {
 	const [text, setText] = useState("");
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -121,8 +121,16 @@ export function Composer({
 			const textContent = await file.text();
 			return { id, name: file.name, size: file.size, kind: "text", textContent };
 		}
-		// Large or unknown type → path reference
-		return { id, name: file.name, size: file.size, kind: "path-ref" };
+		// Large or unknown type → path reference. A bare filename is useless to the
+		// agent, so resolve the real path through the preload bridge.
+		const fullPath = window.piDesktop.filePath(file);
+		return {
+			id,
+			name: file.name,
+			size: file.size,
+			kind: "path-ref",
+			...(fullPath.length > 0 ? { fullPath } : {}),
+		};
 	}
 
 	async function filesToAttachments(files: FileList): Promise<Attachment[]> {
@@ -155,7 +163,7 @@ export function Composer({
 			} else if (att.kind === "text" && att.textContent) {
 				extraContext += `\n\nFile: ${att.name}\n\`\`\`\n${att.textContent.slice(0, 10_000)}\n\`\`\``;
 			} else if (att.kind === "path-ref") {
-				extraContext += `\n\nSee file: ${att.name}`;
+				extraContext += `\n\nSee file: ${att.fullPath ?? att.name}`;
 			}
 		}
 		const fullText = extraContext.length > 0 ? trimmed + "\n" + extraContext : trimmed;

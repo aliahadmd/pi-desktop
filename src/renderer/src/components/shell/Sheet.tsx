@@ -64,7 +64,6 @@ export function Sheet({
 						</button>
 					</div>
 					<div className="min-h-0 flex-1 overflow-y-auto">
-						{/* Focus trap-lite: keep tab within the sheet */}
 						<div className="sheet-body h-full">{children}</div>
 					</div>
 				</motion.div>

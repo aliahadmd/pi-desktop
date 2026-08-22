@@ -4,20 +4,26 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { groupToolRuns, type Block } from "../../lib/ingest";
+import { useTranscriptUi } from "../../stores/transcript-ui";
 import { BlockView } from "./Blocks";
 
 export function Transcript({
 	blocks: rawBlocks,
 	phase,
+	sessionId,
 }: {
 	blocks: Block[];
 	phase: "idle" | "streaming" | "compacting" | "retrying";
+	sessionId: string;
 }): React.JSX.Element {
 	const parentRef = useRef<HTMLDivElement>(null);
 	const stickToBottom = useRef(true);
 	const blocks = useMemo(() => groupToolRuns(rawBlocks), [rawBlocks]);
-	const noopToolClick = (toolCallId: string): void => {
-		void toolCallId;
+	const toggleExpanded = useTranscriptUi((st) => st.toggleExpanded);
+	// Clicking a tool chip in an assistant message expands that tool's output.
+	// Tool blocks are keyed by their toolCallId, so the ui key lines up.
+	const onToolClick = (toolCallId: string): void => {
+		toggleExpanded(`${sessionId}:${toolCallId}`, false);
 	};
 
 	const virtualizer = useVirtualizer({
@@ -25,14 +31,17 @@ export function Transcript({
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 80,
 		overscan: 8,
+		getItemKey: (index) => blocks[index]?.id ?? `idx-${String(index)}`,
 	});
+
+	const totalSize = virtualizer.getTotalSize();
 
 	// Stick to bottom while streaming unless the user scrolled up.
 	useEffect(() => {
 		const el = parentRef.current;
 		if (el === null || !stickToBottom.current) return;
 		el.scrollTop = el.scrollHeight;
-	}, [blocks.length, phase]);
+	}, [totalSize, blocks.length, phase]);
 
 	function handleScroll(): void {
 		const el = parentRef.current;
@@ -52,24 +61,26 @@ export function Transcript({
 					No messages yet.
 				</div>
 			) : (
-				<div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+				<div style={{ height: totalSize, position: "relative" }}>
 					{virtualizer.getVirtualItems().map((item) => {
 						const block = blocks[item.index] as Block;
 						return (
 							<div
-								key={`${block.kind}-${String(item.key)}`}
+								key={item.key}
 								data-index={item.index}
 								ref={virtualizer.measureElement}
+								className={
+									item.index === blocks.length - 1 ? "animate-block-in" : undefined
+								}
 								style={{
 									position: "absolute",
 									top: 0,
 									left: 0,
 									width: "100%",
 									transform: `translateY(${item.start}px)`,
-									animation: "block-enter var(--dur-med) var(--ease-standard)",
 								}}
 							>
-								<BlockView block={block} onToolClick={noopToolClick} />
+								<BlockView block={block} sessionId={sessionId} onToolClick={onToolClick} />
 							</div>
 						);
 					})}

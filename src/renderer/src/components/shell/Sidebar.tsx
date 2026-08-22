@@ -17,6 +17,14 @@ interface SidebarSession {
 	firstMessage: string | null;
 }
 
+/** "ali ahad" → "AA"; single word → first two letters; empty → "?" */
+function initialsOf(name: string): string {
+	const parts = name.trim().split(/[\s._-]+/).filter((p) => p.length > 0);
+	if (parts.length === 0) return "?";
+	if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+	return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+}
+
 function relTime(ts: number | null): string {
 	if (ts === null || ts === 0) return "—";
 	const diff = Date.now() - ts;
@@ -52,6 +60,9 @@ export function Sidebar({
 	useEffect(() => {
 		void window.piDesktop.invoke({ type: "packages.list" }).then((r) => {
 			if (r.ok) setInstalledCount(r.data.packages.length);
+		});
+		void window.piDesktop.invoke({ type: "app.user" }).then((r) => {
+			if (r.ok) setUserName(r.data.name);
 		});
 	}, []);
 
@@ -95,6 +106,7 @@ export function Sidebar({
 			const result = await window.piDesktop.invoke({
 				type: "session.resume",
 				sessionPath: s.filePath,
+				...(s.cwd !== null ? { cwd: s.cwd } : {}),
 			});
 			if (result.ok) onOpenSession(result.data as never);
 		} finally {
@@ -113,10 +125,11 @@ export function Sidebar({
 		return live.phase === "idle" ? "idle" : "streaming";
 	}
 
-	const sessionList = sessions;
 	const [createError, setCreateError] = useState<string | null>(null);
 	const [installedCount, setInstalledCount] = useState(0);
 	const [resuming, setResuming] = useState<Set<string>>(new Set());
+	const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+	const [userName, setUserName] = useState("");
 
 	async function create(backend: "sdk" | "rpc"): Promise<void> {
 		setCreateError(null);
@@ -152,7 +165,7 @@ export function Sidebar({
 				>
 					+
 				</button>
-				{sessionList.slice(0, 8).map((s) => {
+				{sessions.slice(0, 8).map((s) => {
 					const dot = statusDot(s.id);
 					return (
 						<span
@@ -219,9 +232,7 @@ export function Sidebar({
 					type="button"
 					data-testid="sidebar-packages"
 					onClick={() => onOpenSheet("packages")}
-					className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-standard ${
-						false ? "bg-neutral-800 text-neutral-100" : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
-					}`}
+					className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-neutral-400 transition-standard hover:bg-neutral-900 hover:text-neutral-200"
 				>
 					<span className="text-sm">📦</span>
 					<span>Packages</span>
@@ -361,30 +372,72 @@ export function Sidebar({
 							<button
 								type="button"
 								onClick={() => {
-									void window.piDesktop.invoke({
-										type: "session.delete_file",
-										sessionPath: target.filePath,
-									});
+									setConfirmDelete(target.filePath);
 									setMenuFor(null);
-									void load();
 								}}
 								className="block w-full rounded px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-950"
 							>
-								Delete session
+								Delete session…
 							</button>
 						</div>
 					);
 				})()}
 
+			{confirmDelete !== null && (
+				<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-3">
+					<div className="w-full rounded-lg border border-neutral-700 bg-neutral-900 p-3">
+						<p className="mb-1 text-xs font-medium text-neutral-100">Delete session?</p>
+						<p className="mb-3 text-[10px] break-all text-neutral-500">
+							{confirmDelete.split("/").pop()}
+						</p>
+						<p className="mb-3 text-[10px] text-neutral-400">
+							Moves the session file to the Trash. This cannot be undone from Pi Desktop.
+						</p>
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => setConfirmDelete(null)}
+								className="rounded bg-neutral-800 px-2.5 py-1 text-[10px] hover:bg-neutral-700"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								data-testid="confirm-delete-session"
+								onClick={() => {
+									void window.piDesktop
+										.invoke({ type: "session.delete_file", sessionPath: confirmDelete })
+										.then(() => {
+											setConfirmDelete(null);
+											void load();
+										});
+								}}
+								className="rounded bg-red-800 px-2.5 py-1 text-[10px] text-white hover:bg-red-700"
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Footer */}
 			{/* User profile bar */}
 			<div className="flex items-center gap-2 border-t border-neutral-800 px-3 py-2">
 				<span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-950 text-[10px] font-medium text-blue-400">
-					PD
+					{initialsOf(userName)}
 				</span>
 				<span className="min-w-0 flex-1 truncate text-xs text-neutral-400">
-					Pi User
+					{userName.length > 0 ? userName : "—"}
 				</span>
+				<button
+					type="button"
+					title="Settings"
+					onClick={() => onOpenSheet("settings")}
+					className="rounded px-1 text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+				>
+					⚙
+				</button>
 			</div>
 
 			<div className="grid grid-cols-4 gap-1 border-t border-neutral-800 p-1.5">

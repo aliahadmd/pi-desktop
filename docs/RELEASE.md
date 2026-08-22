@@ -75,3 +75,19 @@ Manual checks on a clean machine:
 If a release is broken: delete the GitHub release draft (auto-update serves
 only published releases), fix forward with a patch bump. The app's About panel
 records the exact pi package version for support.
+
+## Auto-update: currently disabled
+
+Auto-update is off. `electron-builder.yml` has no `publish:` block (it previously
+pointed at `earendil-works/pi-desktop` — upstream pi's org, not this project's),
+and `setupAutoUpdater` returns early unless `PI_DESKTOP_ENABLE_UPDATER=1`.
+
+Re-enabling needs all three of:
+
+1. a GitHub repo this project actually owns, set as `publish.owner`/`publish.repo`;
+2. Developer-ID signing **and** notarization (`mac.identity` is `null` today, so
+   electron-updater cannot verify an update's signature);
+3. `PI_DESKTOP_ENABLE_UPDATER=1` in the packaged environment.
+
+Doing fewer than all three ships a client that either cannot verify updates or
+fetches them from the wrong place.

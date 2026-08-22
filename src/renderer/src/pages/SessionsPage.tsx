@@ -141,6 +141,7 @@ export function SessionsPage({
 			const result = await window.piDesktop.invoke({
 				type: "session.resume",
 				sessionPath: session.filePath,
+				...(session.cwd !== null ? { cwd: session.cwd } : {}),
 			});
 			if (result.ok) {
 				onResume?.(result.data);

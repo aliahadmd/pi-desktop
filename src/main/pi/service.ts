@@ -6,6 +6,7 @@
  * pi's own sessionId is data, not the registry key.
  */
 import { randomUUID } from "node:crypto";
+import { closeSync, openSync, readSync } from "node:fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { RendererEventBus } from "../ipc/events";
 import type { IpcRouter } from "../ipc/router";
@@ -55,11 +56,6 @@ export class PiService {
 	/** Register an additional observer (store, usage capture, notifications…). */
 	addHooks(hooks: PiServiceHooks): void {
 		this.hooksList.push(hooks);
-	}
-
-	/** Replace all observers. Idempotent; last wins. */
-	setHooks(hooks: PiServiceHooks): void {
-		this.hooksList.splice(0, this.hooksList.length, hooks);
 	}
 
 	/** Provide the app-level ModelRuntime for all new SDK sessions. */
@@ -277,10 +273,9 @@ export class PiService {
 	private async resumeSession(req: {
 		sessionPath: string;
 		backend?: "sdk" | "rpc";
+		cwd?: string;
 	}): Promise<SessionOpenedResponse> {
-		// Derive cwd from the session file location (sessions live under
-		// ~/.pi/agent/sessions/--<encoded-cwd>--/); the backend re-derives precisely.
-		const cwd = deriveCwdFromSessionPath(req.sessionPath);
+		const cwd = resolveResumeCwd(req.sessionPath, req.cwd);
 		return this.startSession({
 			cwd,
 			kind: req.backend ?? "sdk",
@@ -377,7 +372,10 @@ export class PiService {
 	}
 }
 
-/** ~/.pi/agent/sessions/--Users-foo-bar/<file>.jsonl → /Users/foo/bar (best effort). */
+/**
+ * LAST RESORT ONLY — pi's session-directory encoding is lossy and this decode is
+ * wrong for any path segment containing a hyphen. Prefer resolveResumeCwd.
+ */
 export function deriveCwdFromSessionPath(sessionPath: string): string {
 	const parts = sessionPath.split("/");
 	const dirName = parts[parts.length - 2] ?? "";
@@ -386,4 +384,48 @@ export function deriveCwdFromSessionPath(sessionPath: string): string {
 		return `/${encoded.replaceAll("-", "/")}`;
 	}
 	return process.cwd();
+}
+
+/**
+ * Read `cwd` from a session file's header (its first JSONL line). Returns
+ * undefined for unreadable files or pre-cwd sessions — callers fall back.
+ */
+export function readSessionHeaderCwd(sessionPath: string): string | undefined {
+	try {
+		const fd = openSync(sessionPath, "r");
+		try {
+			// Bounded read: session files can be multi-megabyte; the header is line 1.
+			const buf = Buffer.alloc(65536);
+			const bytes = readSync(fd, buf, 0, buf.length, 0);
+			const firstLine = buf.subarray(0, bytes).toString("utf8").split("\n", 1)[0] ?? "";
+			if (firstLine.length === 0) return undefined;
+			const header = JSON.parse(firstLine) as { type?: string; cwd?: unknown };
+			if (header.type !== "session") return undefined;
+			return typeof header.cwd === "string" && header.cwd.length > 0 ? header.cwd : undefined;
+		} finally {
+			closeSync(fd);
+		}
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Resolve the working directory for a resumed session.
+ *
+ * Pi encodes cwd into the session directory name with
+ * `cwd.replace(/[/\\:]/g, "-")`, which is lossy — a hyphen inside a path segment
+ * is indistinguishable from a separator, so `--Users-me-my-app--` could be
+ * /Users/me/my-app or /Users/me/my/app. Never trust the decode when a real
+ * source is available.
+ */
+export function resolveResumeCwd(
+	sessionPath: string,
+	suppliedCwd: string | undefined,
+	readHeaderCwd: (path: string) => string | undefined = readSessionHeaderCwd
+): string {
+	if (suppliedCwd !== undefined && suppliedCwd.length > 0) return suppliedCwd;
+	const headerCwd = readHeaderCwd(sessionPath);
+	if (headerCwd !== undefined && headerCwd.length > 0) return headerCwd;
+	return deriveCwdFromSessionPath(sessionPath);
 }

@@ -229,6 +229,12 @@ export const sessionResumeRequestSchema = Type.Object({
 	type: Type.Literal("session.resume"),
 	sessionPath: Type.String({ minLength: 1 }),
 	backend: Type.Optional(Type.Union([Type.Literal("sdk"), Type.Literal("rpc")])),
+	/**
+	 * True working directory, when the caller knows it (session list rows carry
+	 * it). Pi's session-directory encoding is lossy, so it cannot be recovered
+	 * from `sessionPath` — see resolveResumeCwd in main/pi/service.ts.
+	 */
+	cwd: Type.Optional(Type.String({ minLength: 1 })),
 });
 
 export const sessionListRequestSchema = Type.Object({
@@ -630,6 +636,10 @@ export const sidecarStatusRequestSchema = Type.Object({
 	type: Type.Literal("sidecar.status"),
 });
 
+export const appUserRequestSchema = Type.Object({
+	type: Type.Literal("app.user"),
+});
+
 export const settingsGetRequestSchema = Type.Object({
 	type: Type.Literal("app.settings.get"),
 	key: Type.String({ minLength: 1 }),
@@ -763,6 +773,7 @@ export const piRequestSchemas = {
 	"sidecar.top": sidecarTopRequestSchema,
 	"sidecar.rebuild": sidecarRebuildRequestSchema,
 	"sidecar.status": sidecarStatusRequestSchema,
+	"app.user": appUserRequestSchema,
 	"app.settings.get": settingsGetRequestSchema,
 	"app.settings.set": settingsSetRequestSchema,
 } as const;
@@ -850,6 +861,7 @@ export interface PiResponseMap {
 	"sidecar.top": JsonValue | null;
 	"sidecar.rebuild": JsonValue | null;
 	"sidecar.status": { status: "starting" | "healthy" | "degraded" | "stopped" };
+	"app.user": { name: string };
 	"app.settings.get": JsonValue;
 	"app.settings.set": null;
 }

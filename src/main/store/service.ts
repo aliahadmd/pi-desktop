@@ -61,7 +61,7 @@ export class StoreService {
 	}
 
 	attachPiService(piService: PiService): void {
-		void piService.setHooks({
+		piService.addHooks({
 			onSessionOpened: (info) => this.handleSessionOpened(info),
 			onSessionClosed: (appSessionId) => {
 				this.appToPiSession.delete(appSessionId);

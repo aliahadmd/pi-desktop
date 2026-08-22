@@ -155,6 +155,7 @@ export type IpcEvent =
 // ---------------------------------------------------------------------------
 
 export interface PiDesktopBridge {
+	filePath(file: File): string;
 	invoke: Invoke;
 	/** Subscribe to main→renderer events. Returns an unsubscribe function. */
 	on(listener: (event: IpcEvent) => void): () => void;

@@ -13,11 +13,18 @@ extraResources:
   # Python sidecar binary (built by sidecar/build.sh — see RELEASE.md)
   - from: sidecar/dist/pi-desktop-sidecar
     to: sidecar/pi-desktop-sidecar
-publish:
-  provider: github
-  owner: earendil-works
-  repo: pi-desktop
-  releaseType: release
+  # Menu-bar template images (loaded by createTray at runtime)
+  - from: resources/tray
+    to: tray
+# No auto-update feed yet. This previously pointed at earendil-works/pi-desktop —
+# upstream pi's org, not this project's. Re-enable only when (a) this repo has its
+# own GitHub remote and (b) builds are signed and notarized (mac.identity is null,
+# so electron-updater cannot verify an update's signature). See docs/RELEASE.md.
+# publish:
+#   provider: github
+#   owner: <your-org>
+#   repo: <your-repo>
+#   releaseType: release
 mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true # required for notarization (chapter 8)
@@ -31,7 +38,7 @@ mac:
       arch:
         - arm64
         - x64
-  # icon: build/icon.icns  # add a real icon before first public release
+  icon: build/icon.icns
 protocols:
   - name: Pi Desktop OAuth
     schemes:

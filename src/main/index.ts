@@ -382,6 +382,14 @@ function registerHandlers(): IpcRouter {
 		return null;
 	});
 
+	// Real account name for the sidebar profile row (no network, no PII beyond
+	// what the OS already shows in Finder).
+	router.handle("app.user", async () => {
+		const os = await import("node:os");
+		const info = os.userInfo();
+		return { name: info.username };
+	});
+
 	// Native folder picker for new sessions. Tests may pre-set the choice.
 	router.handle("app_pick_directory", async () => {
 		if (process.env.PI_DESKTOP_TEST_PICK_DIR !== undefined) {
@@ -403,10 +411,17 @@ function registerHandlers(): IpcRouter {
 // ---------------------------------------------------------------------------
 
 function createTray(): void {
-	// 16x16 monochrome circle as template image (adapts to menu bar theme).
-	const icon = nativeImage.createFromDataURL(
-		"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVQ4y2NgoBAwYv7/z8DAwMDAwMDAxMDIyMDIyMDIyMAkF1nNAABKZQHBNiMq6gAAAABJRU5ErkJggg=="
-	);
+	// Template image: macOS derives the glyph from the alpha channel and recolors
+	// it for light/dark menu bars. The @2x variant is picked up automatically.
+	const iconPath = app.isPackaged
+		? path.join(process.resourcesPath, "tray", "tray-icon.png")
+		: path.join(__dirname, "../../resources/tray/tray-icon.png");
+	const icon = nativeImage.createFromPath(iconPath);
+	if (icon.isEmpty()) {
+		// A blank tray image renders as an invisible menu-bar item — never fail quietly.
+		logger?.error("main", `tray icon failed to load from ${iconPath}`);
+		return;
+	}
 	icon.setTemplateImage(true);
 	try {
 		tray = new Tray(icon);

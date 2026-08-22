@@ -3,6 +3,7 @@
  * tool calls with live output/diffs, tool groups (ch17), notices.
  */
 import { memo, useState, type ReactNode } from "react";
+import { useTranscriptUi } from "../../stores/transcript-ui";
 import Ansi from "ansi-to-react";
 import { Markdown } from "./Markdown";
 import type {
@@ -49,8 +50,17 @@ export const UserBlockView = memo(function UserBlockView({ block }: { block: Use
 	);
 });
 
-const ToolBlockView = memo(function ToolBlockView({ block }: { block: ToolBlock }) {
-	const [expanded, setExpanded] = useState(block.status === "running");
+const ToolBlockView = memo(function ToolBlockView({
+	block,
+	sessionId,
+}: {
+	block: ToolBlock;
+	sessionId: string;
+}) {
+	const key = `${sessionId}:${block.id}`;
+	const fallback = block.status === "running";
+	const expanded = useTranscriptUi((s) => s.isExpanded(key, fallback));
+	const toggleExpanded = useTranscriptUi((s) => s.toggleExpanded);
 	const isDiffOutput = block.status !== "running" && isDiff(block.output);
 	const statusIcon =
 		block.status === "running" ? "⟳" : block.status === "error" ? "✗" : "✓";
@@ -65,7 +75,7 @@ const ToolBlockView = memo(function ToolBlockView({ block }: { block: ToolBlock 
 			<div className="rounded-lg border border-neutral-800 bg-neutral-900/60">
 				<button
 					type="button"
-					onClick={() => setExpanded((v) => !v)}
+					onClick={() => toggleExpanded(key, fallback)}
 					className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
 				>
 					<span className={statusCls}>{statusIcon}</span>
@@ -93,13 +103,14 @@ const ToolBlockView = memo(function ToolBlockView({ block }: { block: ToolBlock 
 	);
 });
 
-function ThinkingPartView({ text }: { text: string }): ReactNode {
-	const [open, setOpen] = useState(false);
+function ThinkingPartView({ text, uiKey }: { text: string; uiKey: string }): ReactNode {
+	const open = useTranscriptUi((s) => s.isExpanded(uiKey, false));
+	const toggleExpanded = useTranscriptUi((s) => s.toggleExpanded);
 	return (
 		<div className="mb-2">
 			<button
 				type="button"
-				onClick={() => setOpen((v) => !v)}
+				onClick={() => toggleExpanded(uiKey, false)}
 				className="text-[10px] tracking-wide text-neutral-500 uppercase hover:text-neutral-400"
 			>
 				{open ? "▾" : "▸"} Thinking
@@ -115,9 +126,11 @@ function ThinkingPartView({ text }: { text: string }): ReactNode {
 
 const AssistantBlockView = memo(function AssistantBlockView({
 	block,
+	sessionId,
 	onToolClick,
 }: {
 	block: AssistantBlock;
+	sessionId: string;
 	onToolClick: ((toolCallId: string) => void) | undefined;
 }) {
 	const streaming = block.status === "streaming";
@@ -126,7 +139,13 @@ const AssistantBlockView = memo(function AssistantBlockView({
 		<div className="px-4 py-2" data-kind="assistant" data-status={block.status}>
 			{block.parts.map((part, i) => {
 				if (part.type === "thinking") {
-					return part.text.length > 0 ? <ThinkingPartView key={i} text={part.text} /> : null;
+					return part.text.length > 0 ? (
+						<ThinkingPartView
+							key={i}
+							text={part.text}
+							uiKey={`${sessionId}:${block.id}:think-${String(i)}`}
+						/>
+					) : null;
 				}
 				if (part.type === "toolCall") {
 					return (
@@ -192,8 +211,16 @@ const AssistantBlockView = memo(function AssistantBlockView({
 	);
 });
 
-const NoticeBlockView = memo(function NoticeBlockView({ block }: { block: NoticeBlock }) {
-	const [dismissed, setDismissed] = useState(false);
+const NoticeBlockView = memo(function NoticeBlockView({
+	block,
+	sessionId,
+}: {
+	block: NoticeBlock;
+	sessionId: string;
+}) {
+	const key = `${sessionId}:${block.id}`;
+	const dismissed = useTranscriptUi((s) => s.isDismissed(key));
+	const dismiss = useTranscriptUi((s) => s.dismiss);
 	if (dismissed) return null;
 	const cls =
 		block.level === "error"
@@ -207,7 +234,7 @@ const NoticeBlockView = memo(function NoticeBlockView({ block }: { block: Notice
 				<span className="flex-1">{block.text}</span>
 				<button
 					type="button"
-					onClick={() => setDismissed(true)}
+					onClick={() => dismiss(key)}
 					className="shrink-0 opacity-50 hover:opacity-100"
 					title="Dismiss"
 				>
@@ -220,12 +247,17 @@ const NoticeBlockView = memo(function NoticeBlockView({ block }: { block: Notice
 
 const ToolGroupView = function ToolGroupView({
 	block,
+	sessionId,
 	renderChild,
 }: {
 	block: ToolGroupBlock;
+	sessionId: string;
 	renderChild(child: ToolBlock): ReactNode;
 }): ReactNode {
-	const [expanded, setExpanded] = useState(block.status === "running");
+	const key = `${sessionId}:${block.id}`;
+	const fallback = block.status === "running";
+	const expanded = useTranscriptUi((s) => s.isExpanded(key, fallback));
+	const toggleExpanded = useTranscriptUi((s) => s.toggleExpanded);
 	const running = block.children.some((c) => c.status === "running");
 	const errored = block.children.some((c) => c.status === "error");
 	const label =
@@ -234,7 +266,7 @@ const ToolGroupView = function ToolGroupView({
 		<div data-kind="tool-group">
 			<button
 				type="button"
-				onClick={() => setExpanded((v) => !v)}
+				onClick={() => toggleExpanded(key, fallback)}
 				className="flex w-full items-center gap-2 px-4 py-1 text-left text-xs text-neutral-400 hover:bg-neutral-900/50"
 			>
 				<span className={running ? "text-blue-400" : errored ? "text-red-400" : "text-green-500"}>
@@ -246,7 +278,11 @@ const ToolGroupView = function ToolGroupView({
 				</span>
 			</button>
 			{(expanded || running) && (
-				<div>{block.children.map((child) => renderChild(child))}</div>
+				<div>
+					{block.children.map((child) => (
+						<div key={child.id}>{renderChild(child)}</div>
+					))}
+				</div>
 			)}
 		</div>
 	);
@@ -254,26 +290,31 @@ const ToolGroupView = function ToolGroupView({
 
 export function BlockView({
 	block,
+	sessionId,
 	onToolClick,
 }: {
 	block: Block;
+	sessionId: string;
 	onToolClick: ((toolCallId: string) => void) | undefined;
 }): ReactNode {
 	switch (block.kind) {
 		case "user":
 			return <UserBlockView block={block} />;
 		case "assistant":
-			return <AssistantBlockView block={block} onToolClick={onToolClick} />;
+			return <AssistantBlockView block={block} sessionId={sessionId} onToolClick={onToolClick} />;
 		case "tool":
-			return <ToolBlockView block={block} />;
+			return <ToolBlockView block={block} sessionId={sessionId} />;
 		case "toolGroup":
 			return (
 				<ToolGroupView
 					block={block}
-					renderChild={(child) => <BlockView block={child} onToolClick={onToolClick} />}
+					sessionId={sessionId}
+					renderChild={(child) => (
+						<BlockView block={child} sessionId={sessionId} onToolClick={onToolClick} />
+					)}
 				/>
 			);
 		case "notice":
-			return <NoticeBlockView block={block} />;
+			return <NoticeBlockView block={block} sessionId={sessionId} />;
 	}
 }

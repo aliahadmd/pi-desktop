@@ -3,13 +3,21 @@
  * Exposes exactly one object, `window.piDesktop`, with typed invoke/on plus
  * the terminal (pty) streaming surface. No electron or node APIs leak.
  */
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 const IPC_INVOKE_CHANNEL = "pidesktop:invoke";
 const IPC_EVENT_CHANNEL = "pidesktop:event";
 
 const bridge = {
 	invoke: (request: unknown) => ipcRenderer.invoke(IPC_INVOKE_CHANNEL, request),
+	/** Absolute path of a dropped/pasted File. Browsers hide it; Electron exposes it. */
+	filePath: (file: File): string => {
+		try {
+			return webUtils.getPathForFile(file);
+		} catch {
+			return "";
+		}
+	},
 	on: (listener: (event: unknown) => void) => {
 		const wrapped = (_event: unknown, payload: unknown): void => {
 			listener(payload);

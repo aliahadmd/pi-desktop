@@ -7,6 +7,7 @@ import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
 import type { PiImageInput } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
+import { nextActiveTerminalTab } from "../lib/terminal-tabs";
 import { Transcript } from "../components/chat/Transcript";
 import { Composer } from "../components/chat/Composer";
 import { StatusBar } from "../components/chat/StatusBar";
@@ -144,6 +145,12 @@ export default function ChatPage(): React.JSX.Element {
 			});
 	}
 
+	function closeTerminalTab(index: number): void {
+		if (terminalTabs.length <= 1) return;
+		setTerminalTabs((prev) => prev.filter((_, j) => j !== index));
+		setActiveTermTab((prev) => nextActiveTerminalTab(prev, index, terminalTabs.length));
+	}
+
 	function runBash(command: string, excludeFromContext: boolean): void {
 		if (activeId === null) return;
 		const requestId = `bash-${Date.now()}`;
@@ -236,17 +243,17 @@ export default function ChatPage(): React.JSX.Element {
 {/* Icon rail + dock */}
 					<div className="flex min-h-0 flex-1">
 						<div className="flex min-w-0 flex-1 flex-col">
-							<Transcript blocks={active.blocks} phase={active.phase} />
+							<Transcript blocks={active.blocks} phase={active.phase} sessionId={active.id} />
 						</div>
 
 						{/* Icon rail (ch22) */}
-						{active.phase !== undefined && (
-							<div className="flex w-10 shrink-0 flex-col items-center gap-0.5 border-l border-neutral-800 py-2">
+						<div className="flex w-10 shrink-0 flex-col items-center gap-0.5 border-l border-neutral-800 py-2">
 								{([
 									{ tab: "files" as const, label: "📁", title: "Files" },
 									{ tab: "review" as const, label: "🔍", title: `Review (${reviewCount})` },
 									{ tab: "commands" as const, label: "⌘", title: "Commands" },
 									{ tab: "tree" as const, label: "🌳", title: "Tree" },
+									{ tab: "terminal" as const, label: "▤", title: "Terminal" },
 								]).map(({ tab, label, title }) => (
 									<button
 										key={tab}
@@ -268,8 +275,7 @@ export default function ChatPage(): React.JSX.Element {
 										)}
 									</button>
 								))}
-							</div>
-		)}
+						</div>
 
 						{dockTab !== null && (
 							<AnimatePresence initial={false}>
@@ -281,7 +287,7 @@ export default function ChatPage(): React.JSX.Element {
 								className="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-neutral-800"
 							>
 								<div className="flex h-8 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
-									{(["files", "review", "commands", "tree"] as const).map((t) => (
+									{(["files", "review", "commands", "tree", "terminal"] as const).map((t) => (
 										<button
 											key={t}
 											type="button"
@@ -330,15 +336,10 @@ export default function ChatPage(): React.JSX.Element {
 														tabIndex={0}
 														onClick={(e) => {
 															e.stopPropagation();
-															if (terminalTabs.length > 1) {
-																setTerminalTabs((prev) => prev.filter((_, j) => j !== i));
-																setActiveTermTab((prev) => Math.min(prev, terminalTabs.length - 2));
-															}
+															closeTerminalTab(i);
 														}}
 														onKeyDown={(e) => {
-															if (e.key === "Enter" && terminalTabs.length > 1) {
-																setTerminalTabs((prev) => prev.filter((_, j) => j !== i));
-															}
+															if (e.key === "Enter") closeTerminalTab(i);
 														}}
 														className="ml-0.5 text-neutral-600 hover:text-red-400"
 													>
@@ -362,10 +363,13 @@ export default function ChatPage(): React.JSX.Element {
 											</button>
 										</div>
 										<div className="min-h-0 flex-1">
-											<TerminalPanel
-												key={terminalTabs[activeTermTab]?.id ?? "term-1"}
-												cwd={active.cwd}
-											/>
+											{terminalTabs.map((tab, i) => (
+												<TerminalPanel
+													key={tab.id}
+													cwd={active.cwd}
+													active={i === activeTermTab}
+												/>
+											))}
 										</div>
 									</div>
 								)}
