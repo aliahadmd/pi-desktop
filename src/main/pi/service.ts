@@ -44,6 +44,8 @@ export class PiService {
 	private readonly hooksList: PiServiceHooks[] = [];
 	private sharedRuntime: unknown = undefined;
 	private extensionPaths: string[] = [];
+	private scopedModels: Array<{ provider: string; modelId: string; thinkingLevel?: string }> = [];
+	private desktopTools: unknown[] = [];
 
 	constructor(bus: RendererEventBus, hooks?: PiServiceHooks) {
 		this.bus = bus;
@@ -68,6 +70,14 @@ export class PiService {
 	/** Extension files loaded into every SDK session (e.g. approval gate). */
 	setExtensionPaths(paths: string[]): void {
 		this.extensionPaths = paths;
+	}
+
+	setScopedModels(models: Array<{ provider: string; modelId: string; thinkingLevel?: string }>): void {
+		this.scopedModels = models;
+	}
+
+	setDesktopTools(tools: unknown[]): void {
+		this.desktopTools = tools;
 	}
 
 	registerHandlers(router: IpcRouter): void {
@@ -138,7 +148,9 @@ export class PiService {
 		});
 		router.handle("session.bash", async (req) => {
 			try {
-				return await this.backend(req.sessionId).bash(req.command);
+				return await this.backend(req.sessionId).bash(req.command, {
+					...(req.excludeFromContext === true ? { excludeFromContext: true } : {}),
+				});
 			} finally {
 				// Complete the streaming bash block in the transcript.
 				this.bus.send({
@@ -169,6 +181,27 @@ export class PiService {
 			return null;
 		});
 		router.handle("session.fork", async (req) => this.backend(req.sessionId).fork(req.entryId));
+		router.handle("session.tree", async (req) => this.backend(req.sessionId).getTree());
+		router.handle("session.entries", async (req) =>
+			this.backend(req.sessionId).getEntries(req.since)
+		);
+		router.handle("session.clone", async (req) => this.backend(req.sessionId).clone());
+		router.handle("session.switch", async (req) =>
+			this.backend(req.sessionId).switchSession(req.sessionPath)
+		);
+		router.handle("session.navigate", async (req) => {
+			const backend = this.backend(req.sessionId);
+			return backend.navigateTree(req.entryId, {
+				...(req.summarize !== undefined ? { summarize: req.summarize } : {}),
+				...(req.customInstructions !== undefined
+					? { customInstructions: req.customInstructions }
+					: {}),
+			});
+		});
+		router.handle("session.export_jsonl", async (req) => {
+			const exported = await this.backend(req.sessionId).exportToJsonl(req.outputPath);
+			return { path: exported };
+		});
 		router.handle("session.respond_ui", async (req) => {
 			const response: UiDialogResponse = {
 				requestId: req.requestId,
@@ -249,6 +282,8 @@ export class PiService {
 			...(opts.noSession === true ? { noSession: true } : {}),
 			...(this.sharedRuntime !== undefined ? { modelRuntime: this.sharedRuntime } : {}),
 			...(this.extensionPaths.length > 0 ? { extensionPaths: this.extensionPaths } : {}),
+			...(this.scopedModels.length > 0 ? { scopedModels: this.scopedModels } : {}),
+			...(this.desktopTools.length > 0 ? { desktopTools: this.desktopTools } : {}),
 			onEvent: (event) => {
 				this.bus.send({ type: "pi_event", sessionId: id, event });
 				for (const hooks of this.hooksList) hooks.onSessionEvent?.(id, event);

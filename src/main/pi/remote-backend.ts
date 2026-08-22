@@ -89,7 +89,10 @@ export class RemotePiBackend implements IPiBackend {
 	async exportHtml(_outputPath?: string): Promise<string> {
 		throw notImplemented();
 	}
-	async bash(_command: string): Promise<JsonValue> {
+	async bash(
+		_command: string,
+		_opts?: { excludeFromContext?: boolean }
+	): Promise<JsonValue> {
 		throw notImplemented();
 	}
 	async abortBash(): Promise<void> {
@@ -99,6 +102,27 @@ export class RemotePiBackend implements IPiBackend {
 		throw notImplemented();
 	}
 	async respondUi(_response: UiDialogResponse): Promise<void> {
+		throw notImplemented();
+	}
+	async navigateTree(
+			_entryId: string,
+			_options?: { summarize?: boolean; customInstructions?: string }
+		): Promise<{ text?: string; cancelled: boolean }> {
+		throw notImplemented();
+	}
+	async getTree(): Promise<import("../../shared/pi").JsonValue> {
+		throw notImplemented();
+	}
+	async getEntries(_since?: string): Promise<{ entries: import("../../shared/pi").JsonValue[]; leafId: string | null }> {
+		throw notImplemented();
+	}
+	async clone(): Promise<{ cancelled: boolean }> {
+		throw notImplemented();
+	}
+	async switchSession(_sessionPath: string): Promise<{ cancelled: boolean }> {
+		throw notImplemented();
+	}
+	async exportToJsonl(_outputPath?: string): Promise<string> {
 		throw notImplemented();
 	}
 }

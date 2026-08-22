@@ -11,6 +11,7 @@ export function Composer({
 	insertText,
 	onInsertHandled,
 	onSend,
+	onBash,
 	onAbort,
 }: {
 	streaming: boolean;
@@ -18,6 +19,7 @@ export function Composer({
 	insertText?: string | null;
 	onInsertHandled?(): void;
 	onSend(text: string, images: PiImageInput[], streamingBehavior?: "steer" | "followUp"): void;
+	onBash(command: string, excludeFromContext: boolean): void;
 	onAbort(): void;
 }): React.JSX.Element {
 	const [text, setText] = useState("");
@@ -56,6 +58,16 @@ export function Composer({
 	function submit(): void {
 		const trimmed = text.trim();
 		if (trimmed.length === 0 && images.length === 0) return;
+		if (trimmed.startsWith("!!")) {
+			onBash(trimmed.slice(2).trim(), true);
+			setText("");
+			return;
+		}
+		if (trimmed.startsWith("!")) {
+			onBash(trimmed.slice(1).trim(), false);
+			setText("");
+			return;
+		}
 		const behavior = streaming ? (followUpMode ? "followUp" : "steer") : undefined;
 		onSend(trimmed, images, behavior);
 		setText("");
@@ -113,7 +125,7 @@ export function Composer({
 							? followUpMode
 								? "Queue as follow-up…"
 								: "Steer the agent…"
-							: "Prompt pi… (Enter to send, Shift+Enter for newline)"
+							: "Prompt pi… (! bash, !! bash excl., Shift+Enter newline)"
 					}
 					data-testid="composer-input"
 					className="max-h-[200px] flex-1 resize-none rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-blue-500"

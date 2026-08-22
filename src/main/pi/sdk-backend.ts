@@ -6,14 +6,17 @@
  * and offers reopening the session in RPC (isolation) mode.
  */
 import {
-	createAgentSession,
-	DefaultResourceLoader,
+	createAgentSessionFromServices,
+	createAgentSessionRuntime,
+	createAgentSessionServices,
+	getAgentDir,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
-	getAgentDir,
 	type AgentSession,
 	type AgentSessionEvent,
+	type AgentSessionRuntime,
+	type CreateAgentSessionRuntimeFactory,
 	type ModelRuntime as PiModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import type {
@@ -31,6 +34,8 @@ export class SdkPiBackend implements IPiBackend {
 	readonly kind = "sdk" as const;
 
 	private session: AgentSession | null = null;
+	private runtime: AgentSessionRuntime | null = null;
+	private unsubscribe: (() => void) | null = null;
 	private modelRuntime: PiModelRuntime | null = null;
 	private readonly options: BackendOptions;
 	private readonly uiAdapter: SdkExtensionUiAdapter;
@@ -51,14 +56,6 @@ export class SdkPiBackend implements IPiBackend {
 		this.modelRuntime =
 			(this.options.modelRuntime as PiModelRuntime | undefined) ??
 			(await ModelRuntime.create());
-		const loader = new DefaultResourceLoader({
-			cwd,
-			agentDir: getAgentDir(),
-			...(this.options.extensionPaths !== undefined && this.options.extensionPaths.length > 0
-				? { additionalExtensionPaths: this.options.extensionPaths }
-				: {}),
-		});
-		await loader.reload();
 		const settingsManager = SettingsManager.create(cwd);
 		const sessionManager =
 			sessionPath !== undefined
@@ -67,34 +64,87 @@ export class SdkPiBackend implements IPiBackend {
 					? SessionManager.inMemory(cwd)
 					: SessionManager.create(cwd);
 
-		const { session } = await createAgentSession({
+		const customTools = (this.options.desktopTools ?? []) as import("@earendil-works/pi-coding-agent").ToolDefinition[];
+		const scopedModels = (this.options.scopedModels ?? [])
+			.map((entry: { provider: string; modelId: string; thinkingLevel?: string }) => {
+				const model = this.modelRuntime?.getModel(entry.provider, entry.modelId);
+				if (model === undefined) return null;
+				return {
+					model,
+					...(entry.thinkingLevel !== undefined
+						? { thinkingLevel: entry.thinkingLevel as never }
+						: {}),
+				};
+			})
+			.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+		const runtimeFactory: CreateAgentSessionRuntimeFactory = async ({
+			cwd: runtimeCwd,
+			agentDir,
+			sessionManager: sm,
+			sessionStartEvent,
+		}) => {
+			const services = await createAgentSessionServices({
+				cwd: runtimeCwd,
+				agentDir,
+				...(this.modelRuntime !== null ? { modelRuntime: this.modelRuntime } : {}),
+				settingsManager,
+			});
+			return {
+				...(await createAgentSessionFromServices({
+					services,
+					sessionManager: sm,
+					...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
+					...(scopedModels.length > 0 ? { scopedModels } : {}),
+					...(customTools.length > 0 ? { customTools } : {}),
+				})),
+				services,
+				diagnostics: [],
+			};
+		};
+
+		const runtime = await createAgentSessionRuntime(runtimeFactory, {
 			cwd,
 			agentDir: getAgentDir(),
-			modelRuntime: this.modelRuntime,
-			resourceLoader: loader,
-			settingsManager,
 			sessionManager,
-			...(name !== undefined ? {} : {}),
 		});
+		this.runtime = runtime;
+		const session = runtime.session;
 
-		await session.bindExtensions({
-			uiContext: this.uiAdapter.buildContext(session),
-			mode: "rpc", // degraded UI parity: dialogs forwarded, TUI-specific calls no-op
-		});
-		session.subscribe((event: AgentSessionEvent) => {
-			const mapped = mapSdkEventToPiEvent(event);
-			if (mapped !== null) this.options.onEvent(mapped);
-		});
+		await this.bindToSession(session);
+		this.session = session;
 
 		if (name !== undefined) {
 			session.setSessionName(name);
 		}
-		this.session = session;
+	}
+
+	/**
+	 * Bind UI adapter + event subscription to a session. Re-invoked on every
+	 * session replacement (fork/clone/switch) via AgentSessionRuntime.
+	 */
+	private async bindToSession(session: AgentSession): Promise<void> {
+		await session.bindExtensions({
+			uiContext: this.uiAdapter.buildContext(session),
+			mode: "rpc", // degraded UI parity: dialogs forwarded, TUI-specific calls no-op
+		});
+		this.unsubscribe?.();
+		this.unsubscribe = session.subscribe((event: AgentSessionEvent) => {
+			const mapped = mapSdkEventToPiEvent(event);
+			if (mapped !== null) this.options.onEvent(mapped);
+		});
+		this.runtime?.setRebindSession(async (nextSession: AgentSession) => {
+			this.session = nextSession;
+			await this.bindToSession(nextSession);
+		});
 	}
 
 	async dispose(): Promise<void> {
+		this.unsubscribe?.();
+		this.unsubscribe = null;
 		this.session?.dispose();
 		this.session = null;
+		this.runtime = null;
 	}
 
 	getSessionFile(): string | undefined {
@@ -240,8 +290,13 @@ export class SdkPiBackend implements IPiBackend {
 		return this.requireSession().exportToHtml(outputPath);
 	}
 
-	async bash(command: string): Promise<JsonValue> {
-		const result = await this.requireSession().executeBash(command);
+	async bash(
+		command: string,
+		opts?: { excludeFromContext?: boolean }
+	): Promise<JsonValue> {
+		const result = await this.requireSession().executeBash(command, undefined, {
+			...(opts?.excludeFromContext === true ? { excludeFromContext: true } : {}),
+		});
 		return toJson(result);
 	}
 
@@ -254,6 +309,62 @@ export class SdkPiBackend implements IPiBackend {
 		return result.editorText === undefined
 			? { cancelled: result.cancelled }
 			: { text: result.editorText, cancelled: result.cancelled };
+	}
+
+	async navigateTree(
+		entryId: string,
+		options?: { summarize?: boolean; customInstructions?: string }
+	): Promise<{ text?: string; cancelled: boolean }> {
+		const result = await this.requireSession().navigateTree(entryId, {
+			...(options?.summarize !== undefined ? { summarize: options.summarize } : {}),
+			...(options?.customInstructions !== undefined
+				? { customInstructions: options.customInstructions }
+				: {}),
+		});
+		if (result.aborted === true) {
+			throw new Error("navigation aborted by extension");
+		}
+		return result.editorText === undefined
+			? { cancelled: result.cancelled }
+			: { text: result.editorText, cancelled: result.cancelled };
+	}
+
+	async getTree(): Promise<JsonValue> {
+		const manager = this.requireSession().sessionManager;
+		return toJson(manager.getTree());
+	}
+
+	async getEntries(since?: string): Promise<{ entries: JsonValue[]; leafId: string | null }> {
+		const manager = this.requireSession().sessionManager;
+		const entries = manager.getEntries();
+		const startIndex = since === undefined ? 0 : entries.findIndex((e) => e.id === since) + 1;
+		if (since !== undefined && startIndex === 0 && entries[0]?.id !== since && entries.length > 0) {
+			// cursor not found — treat as full sync from the start
+		}
+		const slice = since === undefined ? entries : entries.slice(Math.max(startIndex, 0));
+		return {
+			entries: slice.map((e) => toJson(e)),
+			leafId: manager.getLeafEntry()?.id ?? null,
+		};
+	}
+
+	async clone(): Promise<{ cancelled: boolean }> {
+		if (this.runtime === null) throw new Error("runtime not available");
+		const leaf = this.runtime.session.sessionManager.getLeafEntry();
+		const result = await this.runtime.fork(leaf?.id ?? "", { position: "at" });
+		await this.bindToSession(this.runtime.session);
+		return { cancelled: result.cancelled };
+	}
+
+	async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
+		if (this.runtime === null) throw new Error("runtime not available");
+		const result = await this.runtime.switchSession(sessionPath);
+		await this.bindToSession(this.runtime.session);
+		return { cancelled: result.cancelled };
+	}
+
+	async exportToJsonl(outputPath?: string): Promise<string> {
+		return this.requireSession().exportToJsonl(outputPath);
 	}
 
 	async respondUi(response: UiDialogResponse): Promise<void> {

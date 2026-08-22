@@ -30,6 +30,10 @@ export interface BackendOptions {
 	modelRuntime?: unknown;
 	/** Extra extension files to load (e.g. the bundled approval extension). */
 	extensionPaths?: string[];
+	/** Scoped model cycle list ({provider, modelId, thinkingLevel}). */
+	scopedModels?: Array<{ provider: string; modelId: string; thinkingLevel?: string }>;
+	/** Desktop-native custom tools (chapter 12). */
+	desktopTools?: unknown[];
 	/** Event sink (already JSON-safe). */
 	onEvent(event: PiEvent): void;
 	/** Called when the backend dies unexpectedly (crash, exit). */
@@ -79,10 +83,27 @@ export interface IPiBackend {
 	getStats(): Promise<JsonValue>;
 	exportHtml(outputPath?: string): Promise<string>;
 
-	bash(command: string): Promise<JsonValue>;
+	bash(
+		command: string,
+		opts?: { excludeFromContext?: boolean }
+	): Promise<JsonValue>;
 	abortBash(): Promise<void>;
 
 	fork(entryId: string): Promise<{ text?: string; cancelled: boolean }>;
+	/** Navigate within the session tree; optionally summarize the abandoned branch. */
+	navigateTree(
+		entryId: string,
+		options?: { summarize?: boolean; customInstructions?: string }
+	): Promise<{ text?: string; cancelled: boolean }>;
+	/** Full session branch tree (JSON-safe projection). */
+	getTree(): Promise<JsonValue>;
+	/** Entries in append order, optionally after a cursor id. */
+	getEntries(since?: string): Promise<{ entries: JsonValue[]; leafId: string | null }>;
+	/** Duplicate the current branch into a new session at the current position. */
+	clone(): Promise<{ cancelled: boolean }>;
+	/** Replace the active session with another session file. */
+	switchSession(sessionPath: string): Promise<{ cancelled: boolean }>;
+	exportToJsonl(outputPath?: string): Promise<string>;
 	respondUi(response: UiDialogResponse): Promise<void>;
 }
 

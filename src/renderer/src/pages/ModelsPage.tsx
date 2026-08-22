@@ -4,6 +4,17 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ModelCatalogEntry, ProviderAuthInfo } from "../../../shared/pi";
 
+const SUBSCRIPTION_COPY: Record<string, string> = {
+	"claude-pro-max":
+		"Claude Pro/Max: third-party harness usage draws from extra usage and is billed per token.",
+	openai_codex: "Requires a ChatGPT Plus or Pro subscription (Codex for OSS).",
+	copilot:
+		"GitHub Copilot: sign in with github.com or enter your Enterprise domain. Enable models via VS Code if you hit 'model not supported'.",
+	xai: "xAI Gro/X subscription: choose 'Use a subscription' at login; API keys remain available.",
+	openrouter:
+		"OpenRouter: PKCE browser flow. On headless machines the browser cannot reach the loopback callback - paste the final redirect URL into the prompt instead.",
+};
+
 export function ModelsPage({
 	onUseWithSession,
 }: {
@@ -13,6 +24,9 @@ export function ModelsPage({
 	const [models, setModels] = useState<ModelCatalogEntry[]>([]);
 	const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
 	const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
+	const [showModelsJson, setShowModelsJson] = useState(false);
+	const [modelsJson, setModelsJson] = useState<string | null>(null);
+	const [jsonSaving, setJsonSaving] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
@@ -155,6 +169,11 @@ export function ModelsPage({
 								<p className="mt-0.5 font-mono text-[10px] text-neutral-500">
 									{provider.id} · {provider.configured ? provider.source ?? "configured" : "not configured"}
 								</p>
+								{SUBSCRIPTION_COPY[provider.id] !== undefined && (
+									<p className="mt-2 rounded border border-purple-900 bg-purple-950/40 px-3 py-1.5 text-[11px] text-purple-200">
+										{SUBSCRIPTION_COPY[provider.id]}
+									</p>
+								)}
 
 								<div className="mt-4 flex flex-wrap items-center gap-2">
 									<input
@@ -207,6 +226,103 @@ export function ModelsPage({
 										</>
 									) : null}
 								</div>
+
+								<div className="mt-6 flex gap-2">
+									<button
+										type="button"
+										onClick={() => {
+											if (modelsJson !== null) {
+												setShowModelsJson((v) => !v);
+												return;
+											}
+											void window.piDesktop
+												.invoke({ type: "models.json.get" })
+												.then((r) => {
+													if (r.ok) {
+														setModelsJson(JSON.stringify(r.data, null, 2));
+														setShowModelsJson(true);
+													} else setError(r.error.message);
+												});
+										}}
+										className="rounded bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
+									>
+										{showModelsJson ? "Hide models.json" : "Edit models.json"}
+									</button>
+									<button
+										type="button"
+										onClick={() => {
+											const preset = {
+												providers: {
+													llamacpp: {
+														baseUrl: "http://127.0.0.1:8080/v1",
+														api: "openai-completions",
+														apiKey: "llama",
+														compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+														models: [{ id: "local-model" }],
+													},
+												},
+											};
+											setModelsJson(
+												JSON.stringify(
+													modelsJson !== null
+														? { ...JSON.parse(modelsJson), ...preset }
+														: preset,
+													null,
+													2
+												)
+											);
+											setShowModelsJson(true);
+										}}
+										className="rounded bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
+										title="Insert a llama.cpp router preset (merge)"
+									>
+										llama.cpp preset
+									</button>
+								</div>
+
+								{showModelsJson && modelsJson !== null && (
+									<div className="mt-3">
+										<textarea
+											value={modelsJson}
+											onChange={(e) => setModelsJson(e.target.value)}
+											rows={16}
+											spellCheck={false}
+											className="w-full rounded border border-neutral-700 bg-neutral-950 p-3 font-mono text-[11px] outline-none focus:border-blue-500"
+										/>
+										<div className="mt-2 flex items-center gap-2">
+											<button
+												type="button"
+												disabled={jsonSaving}
+												onClick={() => {
+													setJsonSaving(true);
+													try {
+														JSON.parse(modelsJson); // validate before save
+													} catch (e) {
+														setError(`Invalid JSON: ${String(e)}`);
+														setJsonSaving(false);
+														return;
+													}
+													void window.piDesktop
+														.invoke({ type: "models.json.save", content: modelsJson })
+														.then((r) => {
+															if (!r.ok) setError(r.error.message);
+															else {
+																setNotice("models.json saved. Restart sessions to pick up changes.");
+																setShowModelsJson(false);
+															}
+														})
+														.finally(() => setJsonSaving(false));
+												}}
+												className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+											>
+												Save models.json
+											</button>
+											<span className="text-[10px] text-neutral-600">
+												Writes ~/.pi/agent/models.json. Restart sessions to apply.
+											</span>
+										</div>
+									</div>
+								)}
 
 								<h3 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-neutral-400 uppercase">
 									Models ({models.filter((m) => m.provider === selectedProvider).length})

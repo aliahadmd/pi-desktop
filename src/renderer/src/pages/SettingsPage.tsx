@@ -3,6 +3,8 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { piThinkingLevels } from "../../../shared/pi";
+import { ScopedModelsEditor } from "./ScopedModelsEditor";
+import { PackagesPanel } from "./PackagesPanel";
 
 interface PiSettings {
 	defaultProvider?: string;
@@ -138,6 +140,16 @@ export function SettingsPage(): React.JSX.Element {
 						/>
 					</SettingRow>
 				</div>
+
+				<div className="mt-8 border-t border-neutral-800 pt-5">
+					<ScopedModelsEditor />
+				</div>
+
+				<div className="mt-8 border-t border-neutral-800 pt-5">
+					<PackagesPanel />
+				</div>
+
+
 
 				<div className="mt-8 border-t border-neutral-800 pt-4 text-[10px] text-neutral-600">
 					{saving ? "Saving…" : "Changes write through pi's SettingsManager."}

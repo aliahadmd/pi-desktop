@@ -12,6 +12,7 @@ import {
 	Menu,
 	nativeImage,
 	session,
+	shell,
 } from "electron";
 import path from "node:path";
 import { RendererEventBus } from "./ipc/events";
@@ -22,6 +23,7 @@ import { PiService } from "./pi/service";
 import { SidecarManager, type SearchHit } from "./sidecar/manager";
 import { StoreService } from "./store/service";
 import { FileBridge } from "./fs-bridge";
+import { createDesktopTools } from "./pi/desktop-tools";
 import { PtyService } from "./pty-service";
 import { createLogger, type Logger } from "./services/logging";
 import { setupAutoUpdater } from "./updater";
@@ -90,12 +92,36 @@ app.whenReady()
 			getStored: (key) => storeService?.getSettingRaw(key),
 			setStored: (key, value) => storeService?.setSettingRaw(key, value),
 			log: (level, message) => logger?.[level]("main", message),
+			onScopedModelsChanged: (models) => piService?.setScopedModels(models),
 		});
 		await authService.start();
 		piService.setSharedRuntime(authService.getRuntime());
 		authService.registerHandlers(router);
+		{
+			const stored = storeService.getSettingRaw("scopedModels");
+			if (Array.isArray(stored)) {
+				piService.setScopedModels(
+					stored as Array<{ provider: string; modelId: string; thinkingLevel?: string }>
+				);
+			}
+		}
 
 		const bridge = new FileBridge();
+		const shellMod = await import("electron").then((m) => m.shell);
+		piService.setDesktopTools(
+			createDesktopTools({
+				notify: (title, body) => {
+					const n = new Notification({ title, body });
+					n.on("click", () => focusMainWindow());
+					n.show();
+				},
+				writeClipboard: (text) => {
+					void import("electron").then(({ clipboard }) => clipboard.writeText(text));
+				},
+				assertRealScoped: (p) => bridge.assertRealScoped(p),
+				showItemInFolder: (p) => void shellMod.showItemInFolder(p),
+			})
+		);
 		router.handle("fs.list", async (req) => {
 			return { entries: await bridge.list(req.dirPath) };
 		});
@@ -103,6 +129,42 @@ app.whenReady()
 			return await bridge.readFile(req.filePath);
 		});
 		router.handle("workspace.roots", () => ({ roots: bridge.getRoots() }));
+		router.handle("workspace.open_in_editor", async (req) => {
+			const scoped = await bridge.assertRealScoped(req.path);
+			const line = req.line;
+			try {
+				// Prefer VS Code goto-line when the CLI exists; fall back to default app.
+				const { spawn } = await import("node:child_process");
+				const child = spawn("code", ["--goto", `${scoped}${line !== undefined ? `:${line}` : ""}`], {
+					stdio: "ignore",
+				});
+				await new Promise<void>((resolve) => {
+					child.on("error", () => resolve());
+					child.on("exit", (code) => {
+						if (code !== 0) void shell.openPath(scoped);
+						resolve();
+					});
+					setTimeout(() => resolve(), 3000);
+				});
+			} catch {
+				await shell.openPath(scoped);
+			}
+			return null;
+		});
+
+		// Resource text reader for skills/prompt templates (agent dir + project roots).
+		const agentDir = path.join(app.getPath("home"), ".pi/agent");
+		router.handle("resources.read_text", async (req) => {
+			const resolved = path.resolve(req.path);
+			const allowed =
+				resolved.startsWith(agentDir + path.sep) ||
+				bridge.getRoots().some((root) => resolved.startsWith(path.resolve(root) + path.sep)) ||
+				resolved === agentDir;
+			if (!allowed) throw new Error(`path outside allowed resource locations: ${req.path}`);
+			const { readFile } = await import("node:fs/promises");
+			const content = await readFile(resolved, "utf8");
+			return { content: content.slice(0, 200_000) };
+		});
 
 		// Session observers: root registration, tray count, completion notifications.
 		piService.addHooks({

@@ -15,9 +15,11 @@ const PHASE_LABEL: Record<SessionUi["phase"], { text: string; cls: string }> = {
 export function StatusBar({
 	session,
 	onSetThinkingLevel,
+	onCycleModel,
 }: {
 	session: SessionUi;
 	onSetThinkingLevel(level: PiThinkingLevel): void;
+	onCycleModel(): void;
 }): React.JSX.Element {
 	const [open, setOpen] = useState(false);
 	const [supported, setSupported] = useState<PiThinkingLevel[] | null>(null);
@@ -48,9 +50,15 @@ export function StatusBar({
 				{phase.text}
 			</span>
 			<span className="text-neutral-500">|</span>
-			<span data-testid="status-model">
+			<button
+				type="button"
+				data-testid="status-model"
+				onClick={() => onCycleModel()}
+				title="Click to cycle scoped models"
+				className="hover:text-neutral-200"
+			>
 				{model !== undefined ? `${model.provider}/${model.id}` : "no model"}
-			</span>
+			</button>
 			<span className="text-neutral-500">|</span>
 			<span className="relative">
 				<button

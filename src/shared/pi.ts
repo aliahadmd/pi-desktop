@@ -288,6 +288,42 @@ export const sessionThinkingLevelsRequestSchema = Type.Object({
 	...sessionIdProp,
 });
 
+export const sessionTreeRequestSchema = Type.Object({
+	type: Type.Literal("session.tree"),
+	...sessionIdProp,
+});
+
+export const sessionEntriesRequestSchema = Type.Object({
+	type: Type.Literal("session.entries"),
+	...sessionIdProp,
+	since: Type.Optional(Type.String()),
+});
+
+export const sessionCloneRequestSchema = Type.Object({
+	type: Type.Literal("session.clone"),
+	...sessionIdProp,
+});
+
+export const sessionSwitchRequestSchema = Type.Object({
+	type: Type.Literal("session.switch"),
+	...sessionIdProp,
+	sessionPath: Type.String({ minLength: 1 }),
+});
+
+export const sessionNavigateRequestSchema = Type.Object({
+	type: Type.Literal("session.navigate"),
+	...sessionIdProp,
+	entryId: Type.String({ minLength: 1 }),
+	summarize: Type.Optional(Type.Boolean()),
+	customInstructions: Type.Optional(Type.String()),
+});
+
+export const sessionExportJsonlRequestSchema = Type.Object({
+	type: Type.Literal("session.export_jsonl"),
+	...sessionIdProp,
+	outputPath: Type.Optional(Type.String({ minLength: 1 })),
+});
+
 export const sessionCompactRequestSchema = Type.Object({
 	type: Type.Literal("session.compact"),
 	...sessionIdProp,
@@ -331,6 +367,24 @@ export const sessionBashRequestSchema = Type.Object({
 	command: Type.String({ minLength: 1 }),
 	/** Correlates the streamed bash_execution_update blocks for completion. */
 	requestId: Type.String({ minLength: 1 }),
+	/** `!!` variant: keep output out of LLM context. */
+	excludeFromContext: Type.Optional(Type.Boolean()),
+});
+
+export const piConfigWriteTrustRequestSchema = Type.Object({
+	type: Type.Literal("pi.config.write_trust"),
+	content: Type.String(),
+});
+
+export const piConfigReadRequestSchema = Type.Object({
+	type: Type.Literal("pi.config.read"),
+	name: Type.Union([Type.Literal("trust"), Type.Literal("keybindings")]),
+});
+
+export const workspaceOpenInEditorRequestSchema = Type.Object({
+	type: Type.Literal("workspace.open_in_editor"),
+	path: Type.String({ minLength: 1 }),
+	line: Type.Optional(Type.Number({ minimum: 1 })),
 });
 
 export const sessionAbortBashRequestSchema = Type.Object({
@@ -441,6 +495,49 @@ export const authRespondLoginRequestSchema = Type.Object({
 export const authLogoutRequestSchema = Type.Object({
 	type: Type.Literal("auth.logout"),
 	providerId: Type.String({ minLength: 1 }),
+});
+
+export const modelsJsonGetRequestSchema = Type.Object({
+	type: Type.Literal("models.json.get"),
+});
+
+export const modelsJsonSaveRequestSchema = Type.Object({
+	type: Type.Literal("models.json.save"),
+	content: Type.String(), // JSON-encoded full models.json
+});
+
+export const scopedModelsGetRequestSchema = Type.Object({
+	type: Type.Literal("session.scoped_models.get"),
+});
+
+export const scopedModelsSetRequestSchema = Type.Object({
+	type: Type.Literal("session.scoped_models.set"),
+	models: Type.Array(
+		Type.Object({
+			provider: Type.String(),
+			modelId: Type.String(),
+			thinkingLevel: Type.Optional(Type.String()),
+		})
+	),
+});
+
+export const packagesListRequestSchema = Type.Object({
+	type: Type.Literal("packages.list"),
+});
+
+export const packagesInstallRequestSchema = Type.Object({
+	type: Type.Literal("packages.install"),
+	source: Type.String({ minLength: 1 }),
+});
+
+export const packagesRemoveRequestSchema = Type.Object({
+	type: Type.Literal("packages.remove"),
+	source: Type.String({ minLength: 1 }),
+});
+
+export const resourcesReadTextRequestSchema = Type.Object({
+	type: Type.Literal("resources.read_text"),
+	path: Type.String({ minLength: 1 }),
 });
 
 export const piSettingsGetRequestSchema = Type.Object({
@@ -574,6 +671,12 @@ export const piRequestSchemas = {
 	"session.cycle_model": sessionCycleModelRequestSchema,
 	"session.set_thinking": sessionSetThinkingRequestSchema,
 	"session.thinking_levels": sessionThinkingLevelsRequestSchema,
+	"session.tree": sessionTreeRequestSchema,
+	"session.entries": sessionEntriesRequestSchema,
+	"session.clone": sessionCloneRequestSchema,
+	"session.switch": sessionSwitchRequestSchema,
+	"session.navigate": sessionNavigateRequestSchema,
+	"session.export_jsonl": sessionExportJsonlRequestSchema,
 	"session.compact": sessionCompactRequestSchema,
 	"session.state": sessionStateRequestSchema,
 	"session.messages": sessionMessagesRequestSchema,
@@ -599,6 +702,17 @@ export const piRequestSchemas = {
 	"auth.login": authLoginRequestSchema,
 	"auth.respond_login": authRespondLoginRequestSchema,
 	"auth.logout": authLogoutRequestSchema,
+	"models.json.get": modelsJsonGetRequestSchema,
+	"models.json.save": modelsJsonSaveRequestSchema,
+	"session.scoped_models.get": scopedModelsGetRequestSchema,
+	"session.scoped_models.set": scopedModelsSetRequestSchema,
+	"packages.list": packagesListRequestSchema,
+	"packages.install": packagesInstallRequestSchema,
+	"packages.remove": packagesRemoveRequestSchema,
+	"resources.read_text": resourcesReadTextRequestSchema,
+	"pi.config.write_trust": piConfigWriteTrustRequestSchema,
+	"pi.config.read": piConfigReadRequestSchema,
+	"workspace.open_in_editor": workspaceOpenInEditorRequestSchema,
 	"pi.settings.get": piSettingsGetRequestSchema,
 	"pi.settings.set": piSettingsSetRequestSchema,
 	"session.default_model": sessionDefaultModelRequestSchema,
@@ -633,6 +747,12 @@ export interface PiResponseMap {
 	"session.cycle_model": { provider: string; id: string; name: string } | null;
 	"session.set_thinking": { level: PiThinkingLevel };
 	"session.thinking_levels": { levels: PiThinkingLevel[] };
+	"session.tree": JsonValue;
+	"session.entries": { entries: JsonValue[]; leafId: string | null };
+	"session.clone": { cancelled: boolean };
+	"session.switch": { cancelled: boolean };
+	"session.navigate": { text?: string; cancelled: boolean };
+	"session.export_jsonl": { path: string };
 	"session.compact": JsonValue;
 	"session.state": PiSessionState;
 	"session.messages": { messages: JsonValue[] };
@@ -658,6 +778,24 @@ export interface PiResponseMap {
 	"auth.login": null;
 	"auth.respond_login": null;
 	"auth.logout": null;
+	"models.json.get": JsonValue;
+	"models.json.save": null;
+	"session.scoped_models.get": { models: Array<{ provider: string; modelId: string; thinkingLevel?: string }> };
+	"session.scoped_models.set": null;
+	"packages.list": {
+		packages: Array<{
+			source: string;
+			scope: string;
+			filtered: boolean;
+			installedPath?: string;
+		}>;
+	};
+	"packages.install": null;
+	"packages.remove": null;
+	"resources.read_text": { content: string };
+	"pi.config.write_trust": null;
+	"pi.config.read": JsonValue;
+	"workspace.open_in_editor": null;
 	"pi.settings.get": JsonValue;
 	"pi.settings.set": null;
 	"session.default_model": null;

@@ -263,7 +263,13 @@ export class RpcPiBackend implements IPiBackend {
 		return data.path;
 	}
 
-	async bash(command: string): Promise<JsonValue> {
+	async bash(
+		command: string,
+		opts?: { excludeFromContext?: boolean }
+	): Promise<JsonValue> {
+		if (opts?.excludeFromContext === true) {
+			throw new Error("context-excluded bash is SDK-only");
+		}
 		const data = await this.request({ type: "bash", command });
 		return safeJson(data);
 	}
@@ -278,6 +284,50 @@ export class RpcPiBackend implements IPiBackend {
 			cancelled: boolean;
 		};
 		return data;
+	}
+
+	async navigateTree(
+		entryId: string,
+		options?: { summarize?: boolean; customInstructions?: string }
+	): Promise<{ text?: string; cancelled: boolean }> {
+		if (options?.summarize === true || options?.customInstructions !== undefined) {
+			throw new Error(
+				"branch summarization on navigation is SDK-only; RPC fork navigates without summarization"
+			);
+		}
+		return this.fork(entryId);
+	}
+
+	async getTree(): Promise<JsonValue> {
+		const data = await this.request({ type: "get_tree" });
+		return safeJson(data);
+	}
+
+	async getEntries(since?: string): Promise<{ entries: JsonValue[]; leafId: string | null }> {
+		const command: Record<string, unknown> = { type: "get_entries" };
+		if (since !== undefined) command.since = since;
+		const data = (await this.request(command)) as {
+			entries: unknown[];
+			leafId: string | null;
+		};
+		return { entries: data.entries.map((e) => safeJson(e)), leafId: data.leafId };
+	}
+
+	async clone(): Promise<{ cancelled: boolean }> {
+		const data = (await this.request({ type: "clone" })) as { cancelled: boolean };
+		return data;
+	}
+
+	async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
+		const data = (await this.request({ type: "switch_session", sessionPath })) as {
+			cancelled: boolean;
+		};
+		return data;
+	}
+
+	async exportToJsonl(outputPath?: string): Promise<string> {
+		void outputPath;
+		throw new Error("JSONL export is not available in RPC mode (SDK sessions only)");
 	}
 
 	async respondUi(response: UiDialogResponse): Promise<void> {

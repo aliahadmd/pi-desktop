@@ -1,17 +1,33 @@
 /**
- * Chat page: session tabs, transcript, composer, status bar, dialog modal.
+ * Chat page: session tabs, transcript, workspace dock (files/review/commands/
+ * tree), terminal toggle, composer, status bar, dialogs.
  */
 import { useState } from "react";
 import type { PiImageInput } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
-import { CommandsBrowser, FileExplorer, ReviewQueue } from "../components/workspace/Dock";
-import { TerminalPanel } from "../components/workspace/TerminalPanel";
 import { Transcript } from "../components/chat/Transcript";
 import { Composer } from "../components/chat/Composer";
 import { StatusBar } from "../components/chat/StatusBar";
 import { DialogModal } from "../components/chat/DialogModal";
+import {
+	CommandsBrowser,
+	FileExplorer,
+	ReviewQueue,
+	SessionTreePanel,
+} from "../components/workspace/Dock";
+import { TerminalPanel } from "../components/workspace/TerminalPanel";
 
-export function ChatPage(): React.JSX.Element {
+type DockTab = "files" | "review" | "commands" | "tree" | null;
+
+export function refreshState(sessionId: string): void {
+	void window.piDesktop
+		.invoke({ type: "session.state", sessionId })
+		.then((result) => {
+			if (result.ok) useSessions.getState().refreshState(sessionId, result.data);
+		});
+}
+
+export default function ChatPage(): React.JSX.Element {
 	const sessions = useSessions((s) => s.sessions);
 	const activeId = useSessions((s) => s.activeId);
 	const open = useSessions((s) => s.open);
@@ -19,10 +35,16 @@ export function ChatPage(): React.JSX.Element {
 	const setActive = useSessions((s) => s.setActive);
 	const addUserBlock = useSessions((s) => s.addUserBlock);
 	const pushErrorNotice = useSessions((s) => s.pushErrorNotice);
+
 	const [creating, setCreating] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
-	const [dockTab, setDockTab] = useState<"files" | "review" | "commands" | null>(null);
+	const [dockTab, setDockTab] = useState<DockTab>(null);
+	const [treeRefreshKey, setTreeRefreshKey] = useState(0);
 	const [terminalOpen, setTerminalOpen] = useState(false);
+	const [compactOpen, setCompactOpen] = useState(false);
+	const [compactInstructions, setCompactInstructions] = useState("");
+	const [compacting, setCompacting] = useState(false);
+	const [insertedText, setInsertedText] = useState<string | null>(null);
 
 	const sessionList = Object.values(sessions);
 	const active = activeId !== null ? sessions[activeId] : undefined;
@@ -30,7 +52,6 @@ export function ChatPage(): React.JSX.Element {
 		active?.blocks.filter(
 			(b) => b.kind === "tool" && ["edit", "write"].includes(b.toolName)
 		).length ?? 0;
-	const [insertedText, setInsertedText] = useState<string | null>(null);
 
 	async function newSession(backend: "sdk" | "rpc"): Promise<void> {
 		setCreating(true);
@@ -69,21 +90,47 @@ export function ChatPage(): React.JSX.Element {
 				...(streamingBehavior !== undefined ? { streamingBehavior } : {}),
 			})
 			.then((result) => {
-				if (!result.ok) pushErrorNotice(activeId, `Prompt rejected: ${result.error.message}`);
+				if (!result.ok) {
+					pushErrorNotice(activeId, `Prompt rejected: ${result.error.message}`);
+				} else {
+					refreshState(activeId);
+				}
+			});
+	}
+
+	function runBash(command: string, excludeFromContext: boolean): void {
+		if (activeId === null) return;
+		const requestId = `bash-${Date.now()}`;
+		void window.piDesktop
+			.invoke({
+				type: "session.bash",
+				sessionId: activeId,
+				command,
+				requestId,
+				...(excludeFromContext ? { excludeFromContext: true } : {}),
+			})
+			.then((r) => {
+				if (!r.ok) pushErrorNotice(activeId, r.error.message);
 			});
 	}
 
 	return (
 		<div className="flex h-full flex-col">
-			{/* Session tabs */}
+			{/* Tab bar */}
 			<div className="flex h-9 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
 				{createError !== null && (
-				<span className="truncate rounded bg-red-950/70 px-2 py-0.5 text-[10px] text-red-300">
-					{createError}
-					<button type="button" onClick={() => setCreateError(null)} className="ml-1 text-red-400">×</button>
-				</span>
-			)}
-			{sessionList.map((s) => (
+					<span className="truncate rounded bg-red-950/70 px-2 py-0.5 text-[10px] text-red-300">
+						{createError}
+						<button
+							type="button"
+							onClick={() => setCreateError(null)}
+							className="ml-1 text-red-400"
+						>
+							×
+						</button>
+					</span>
+				)}
+				{sessionList.map((s) => (
 					<button
 						key={s.id}
 						type="button"
@@ -169,13 +216,15 @@ export function ChatPage(): React.JSX.Element {
 						{dockTab !== null && (
 							<div className="w-72 shrink-0 overflow-hidden border-l border-neutral-800">
 								<div className="flex h-8 items-center gap-1 border-b border-neutral-800 px-2">
-									{(["files", "review", "commands"] as const).map((t) => (
+									{(["files", "review", "commands", "tree"] as const).map((t) => (
 										<button
 											key={t}
 											type="button"
 											onClick={() => setDockTab(t)}
 											className={`rounded px-2 py-0.5 text-[10px] capitalize ${
-												dockTab === t ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+												dockTab === t
+													? "bg-neutral-800 text-neutral-100"
+													: "text-neutral-500 hover:text-neutral-300"
 											}`}
 										>
 											{t === "review" ? `Review (${reviewCount})` : t}
@@ -192,53 +241,161 @@ export function ChatPage(): React.JSX.Element {
 								<div className="h-[calc(100%-2rem)] overflow-y-auto">
 									{dockTab === "files" && <FileExplorer cwd={active.cwd} />}
 									{dockTab === "review" && <ReviewQueue blocks={active.blocks} />}
-									{dockTab === "commands" && <CommandsBrowser sessionId={active.id} onInsert={(text) => setInsertedText(text)} />}
+									{dockTab === "commands" && (
+										<CommandsBrowser
+											sessionId={active.id}
+											onInsert={(text) => setInsertedText(text)}
+										/>
+									)}
+									{dockTab === "tree" && (
+										<SessionTreePanel
+											sessionId={active.id}
+											refreshKey={treeRefreshKey}
+											onNavigate={(entryId, summarize, instructions) => {
+												void window.piDesktop
+													.invoke({
+														type: "session.navigate",
+														sessionId: active.id,
+														entryId,
+														...(summarize ? { summarize: true } : {}),
+														...(instructions.length > 0
+															? { customInstructions: instructions }
+															: {}),
+													})
+													.then((r) => {
+														if (!r.ok) pushErrorNotice(active.id, r.error.message);
+														else setTreeRefreshKey((k) => k + 1);
+													});
+											}}
+											onFork={(entryId) => {
+												void window.piDesktop
+													.invoke({
+														type: "session.fork",
+														sessionId: active.id,
+														entryId,
+													})
+													.then((r) => {
+														if (!r.ok) pushErrorNotice(active.id, r.error.message);
+														else setTreeRefreshKey((k) => k + 1);
+													});
+											}}
+										/>
+									)}
 								</div>
 							</div>
 						)}
 					</div>
+
 					{terminalOpen && (
 						<div className="h-56 shrink-0 border-t border-neutral-800 bg-black">
 							<TerminalPanel cwd={active.cwd} />
 						</div>
 					)}
+
+					{/* Toolbar */}
 					<div className="flex items-center gap-2 border-t border-neutral-800 px-3 py-1">
 						<button
 							type="button"
 							onClick={() => setDockTab(dockTab === "files" ? null : "files")}
-							className={`rounded px-2 py-0.5 text-[10px] ${dockTab === "files" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"}`}
+							className={`rounded px-2 py-0.5 text-[10px] ${
+								dockTab === "files"
+									? "bg-neutral-800 text-neutral-100"
+									: "text-neutral-500 hover:text-neutral-300"
+							}`}
 						>
 							Files
 						</button>
 						<button
 							type="button"
 							onClick={() => setDockTab(dockTab === "review" ? null : "review")}
-							className={`rounded px-2 py-0.5 text-[10px] ${dockTab === "review" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"}`}
+							className={`rounded px-2 py-0.5 text-[10px] ${
+								dockTab === "review"
+									? "bg-neutral-800 text-neutral-100"
+									: "text-neutral-500 hover:text-neutral-300"
+							}`}
 						>
 							Review ({reviewCount})
 						</button>
 						<button
 							type="button"
 							onClick={() => setDockTab(dockTab === "commands" ? null : "commands")}
-							className={`rounded px-2 py-0.5 text-[10px] ${dockTab === "commands" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"}`}
+							className={`rounded px-2 py-0.5 text-[10px] ${
+								dockTab === "commands"
+									? "bg-neutral-800 text-neutral-100"
+									: "text-neutral-500 hover:text-neutral-300"
+							}`}
 						>
 							Commands
 						</button>
 						<button
 							type="button"
+							onClick={() => {
+								setDockTab(dockTab === "tree" ? null : "tree");
+								setTreeRefreshKey((k) => k + 1);
+							}}
+							className={`rounded px-2 py-0.5 text-[10px] ${
+								dockTab === "tree"
+									? "bg-neutral-800 text-neutral-100"
+									: "text-neutral-500 hover:text-neutral-300"
+							}`}
+						>
+							Tree
+						</button>
+						<button
+							type="button"
+							disabled={active.phase !== "idle"}
+							onClick={() => setCompactOpen(true)}
+							className="rounded px-2 py-0.5 text-[10px] text-neutral-500 hover:text-neutral-300 disabled:opacity-40"
+							title="Summarize older context to free window space"
+						>
+							Compact…
+						</button>
+						<select
+							onChange={(e) => {
+								const action = e.target.value;
+								e.target.selectedIndex = 0;
+								if (action === "") return;
+								void window.piDesktop
+									.invoke(
+										action === "html"
+											? { type: "session.export_html", sessionId: active.id }
+											: { type: "session.export_jsonl", sessionId: active.id }
+									)
+									.then((r) => {
+										if (!r.ok) pushErrorNotice(active.id, r.error.message);
+									});
+							}}
+							defaultValue=""
+							className="rounded bg-transparent px-1 py-0.5 text-[10px] text-neutral-500 hover:text-neutral-300"
+							title="Export session"
+						>
+							<option value="" disabled>
+								Export…
+							</option>
+							<option value="html">Export HTML</option>
+							<option value="jsonl">Export JSONL</option>
+						</select>
+						<button
+							type="button"
 							onClick={() => setTerminalOpen((v) => !v)}
 							data-testid="toggle-terminal"
-							className={`ml-auto rounded px-2 py-0.5 text-[10px] ${terminalOpen ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"}`}
+							className={`ml-auto rounded px-2 py-0.5 text-[10px] ${
+								terminalOpen
+									? "bg-neutral-800 text-neutral-100"
+									: "text-neutral-500 hover:text-neutral-300"
+							}`}
 						>
 							Terminal
 						</button>
 					</div>
+
 					<Composer
 						insertText={insertedText}
 						onInsertHandled={() => setInsertedText(null)}
 						streaming={active.phase !== "idle"}
 						queueCount={active.queue.steering.length + active.queue.followUp.length}
 						onSend={send}
+						onBash={runBash}
 						onAbort={() => {
 							if (activeId !== null) {
 								void window.piDesktop.invoke({
@@ -248,8 +405,17 @@ export function ChatPage(): React.JSX.Element {
 							}
 						}}
 					/>
+
 					<StatusBar
 						session={active}
+						onCycleModel={() => {
+							void window.piDesktop
+								.invoke({ type: "session.cycle_model", sessionId: active.id })
+								.then((r) => {
+									if (!r.ok) pushErrorNotice(active.id, r.error.message);
+									else refreshState(active.id);
+								});
+						}}
 						onSetThinkingLevel={(level) => {
 							void window.piDesktop.invoke({
 								type: "session.set_thinking",
@@ -258,6 +424,77 @@ export function ChatPage(): React.JSX.Element {
 							});
 						}}
 					/>
+
+					{compactOpen && (
+						<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
+							<div className="w-[420px] rounded-xl border border-neutral-700 bg-neutral-900 p-5">
+								<h3 className="mb-1 text-sm font-semibold text-neutral-100">
+									Compact context
+								</h3>
+								<p className="mb-3 text-xs text-neutral-400">
+									Summarizes older messages to free context window space. Recent work is
+									preserved.
+								</p>
+								<textarea
+									value={compactInstructions}
+									onChange={(e) => setCompactInstructions(e.target.value)}
+									rows={3}
+									placeholder="Optional instructions for the summary…"
+									className="mb-4 w-full resize-none rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-blue-500"
+								/>
+								<div className="flex justify-end gap-2">
+									<button
+										type="button"
+										onClick={() => setCompactOpen(false)}
+										className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										data-testid="compact-confirm"
+										disabled={compacting}
+										onClick={() => {
+											setCompacting(true);
+											void window.piDesktop
+												.invoke({
+													type: "session.compact",
+													sessionId: active.id,
+													...(compactInstructions.length > 0
+														? { customInstructions: compactInstructions }
+														: {}),
+												})
+												.then((r) => {
+													setCompacting(false);
+													if (!r.ok) {
+														pushErrorNotice(active.id, r.error.message);
+													} else {
+														const data = r.data as {
+															tokensBefore?: number;
+															estimatedTokensAfter?: number;
+														};
+														useSessions
+															.getState()
+															.pushNotice(
+																active.id,
+																`Context compacted: ${String(data?.tokensBefore ?? "?")} → ${String(data?.estimatedTokensAfter ?? "?")} tokens.`,
+																"info"
+															);
+													}
+													setCompactOpen(false);
+													setCompactInstructions("");
+													refreshState(active.id);
+												});
+										}}
+										className="rounded bg-purple-700 px-3 py-1.5 text-xs text-white hover:bg-purple-600 disabled:opacity-40"
+									>
+										{compacting ? "Compacting…" : "Compact"}
+									</button>
+								</div>
+							</div>
+						</div>
+					)}
+
 					{active.pendingDialog !== undefined && (
 						<DialogModal
 							request={active.pendingDialog}
@@ -279,6 +516,7 @@ export function ChatPage(): React.JSX.Element {
 							}}
 						/>
 					)}
+
 					{active.dead !== undefined && (
 						<div className="border-t border-red-900 bg-red-950/60 px-4 py-2 text-xs text-red-300">
 							Backend died: {active.dead}

@@ -3,13 +3,14 @@
  */
 import { useEffect, useState } from "react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
-import { ChatPage } from "./pages/ChatPage";
+import ChatPage from "./pages/ChatPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { Onboarding } from "./pages/Onboarding";
+import { TrustPanel } from "./pages/TrustPanel";
 
-type Tab = "chat" | "sessions" | "models" | "settings";
+type Tab = "chat" | "sessions" | "models" | "settings" | "trust";
 
 export default function App(): React.JSX.Element {
 	const [tab, setTab] = useState<Tab>("chat");
@@ -89,6 +90,18 @@ export default function App(): React.JSX.Element {
 					>
 						Settings
 					</button>
+					<button
+						type="button"
+						onClick={() => setTab("trust")}
+						data-testid="tab-trust"
+						className={`rounded px-3 py-1 text-xs ${
+							tab === "trust"
+								? "bg-neutral-800 text-neutral-100"
+								: "text-neutral-500 hover:text-neutral-300"
+						}`}
+					>
+						Trust
+					</button>
 				</nav>
 				{pingOk && (
 					<span className="ml-auto font-mono text-[10px] text-neutral-600">ipc ok</span>
@@ -115,6 +128,8 @@ export default function App(): React.JSX.Element {
 							setTab("chat");
 						}}
 					/>
+				) : tab === "trust" ? (
+					<TrustPanel />
 				) : (
 					<SettingsPage />
 				)}

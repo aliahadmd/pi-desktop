@@ -54,6 +54,8 @@ interface PiSessionsState {
 	addUserBlock(sessionId: string, text: string): void;
 	/** Surface an error as a transcript notice. */
 	pushErrorNotice(sessionId: string, message: string): void;
+	/** Surface a generic notice (info/warn/error). */
+	pushNotice(sessionId: string, message: string, level?: "info" | "warn" | "error"): void;
 }
 
 export const useSessions = create<PiSessionsState>((set, get) => {
@@ -232,6 +234,26 @@ export const useSessions = create<PiSessionsState>((set, get) => {
 					id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
 					text,
 					ts: Date.now(),
+				};
+				const ctx: IngestContext = { ...s.ctx, blocks: [...s.blocks, block] };
+				return {
+					sessions: {
+						...prev.sessions,
+						[sessionId]: { ...s, ctx, blocks: ctx.blocks },
+					},
+				};
+			});
+		},
+
+		pushNotice(sessionId, message, level) {
+			set((prev) => {
+				const s = prev.sessions[sessionId];
+				if (s === undefined) return prev;
+				const block: Block = {
+					kind: "notice",
+					id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+					text: message,
+					level: level ?? "info",
 				};
 				const ctx: IngestContext = { ...s.ctx, blocks: [...s.blocks, block] };
 				return {

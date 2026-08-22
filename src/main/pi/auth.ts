@@ -9,6 +9,8 @@
  * app_settings. Keys never reach the renderer unmasked and never appear in logs.
  */
 import { safeStorage } from "electron";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { ModelRuntime, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
 import type { ModelCatalogEntry, ProviderAuthInfo } from "../../shared/pi";
@@ -33,6 +35,9 @@ export class AuthService {
 	private readonly getStored: (key: string) => unknown;
 	private readonly setStored: (key: string, value: unknown) => void;
 	private readonly log: (level: "info" | "warn" | "error", message: string) => void;
+	private readonly onScopedModelsChanged: (
+		models: Array<{ provider: string; modelId: string; thinkingLevel?: string }>
+	) => void;
 	private loginFlows = new Map<string, LoginFlow>();
 
 	constructor(deps: {
@@ -40,11 +45,15 @@ export class AuthService {
 		getStored: (key: string) => unknown;
 		setStored: (key: string, value: unknown) => void;
 		log: (level: "info" | "warn" | "error", message: string) => void;
+		onScopedModelsChanged: (
+			models: Array<{ provider: string; modelId: string; thinkingLevel?: string }>
+		) => void;
 	}) {
 		this.bus = deps.bus;
 		this.getStored = deps.getStored;
 		this.setStored = deps.setStored;
 		this.log = deps.log;
+		this.onScopedModelsChanged = deps.onScopedModelsChanged;
 	}
 
 	async start(): Promise<void> {
@@ -97,6 +106,92 @@ export class AuthService {
 			if (this.runtime === null) throw new Error("auth not ready");
 			await this.runtime.logout(req.providerId);
 			return null;
+		});
+		router.handle("models.json.get", () => {
+			const agentDir = getAgentDir();
+			const modelsPath = path.join(agentDir, "models.json");
+			let content: unknown = { providers: {} };
+			if (existsSync(modelsPath)) {
+				try {
+					content = JSON.parse(readFileSync(modelsPath, "utf8"));
+				} catch (error) {
+					throw new Error(`models.json is not valid JSON: ${describeError(error)}`);
+				}
+			}
+			return toJson(content);
+		});
+		router.handle("models.json.save", (req) => {
+			const parsed: unknown = JSON.parse(req.content);
+			// Minimal shape validation before overwriting pi's file.
+			if (
+				typeof parsed !== "object" ||
+				parsed === null ||
+				typeof (parsed as { providers?: unknown }).providers !== "object" ||
+				(parsed as { providers?: unknown }).providers === null
+			) {
+				throw new Error("models.json must contain a non-empty 'providers' object");
+			}
+			const agentDir = getAgentDir();
+			mkdirSync(agentDir, { recursive: true });
+			writeFileSync(
+				path.join(agentDir, "models.json"),
+				JSON.stringify(parsed, null, 2) + "\n",
+				"utf8"
+			);
+			return null;
+		});
+		router.handle("session.scoped_models.get", () => {
+			if (this.settingsManager === null) return { models: [] };
+			void this.settingsManager;
+			const raw = this.getStored("scopedModels");
+			const models = Array.isArray(raw)
+				? (raw as Array<{ provider: string; modelId: string; thinkingLevel?: string }>)
+				: [];
+			return { models };
+		});
+		router.handle("session.scoped_models.set", (req) => {
+			this.setStored("scopedModels", req.models);
+			this.onScopedModelsChanged(req.models);
+			return null;
+		});
+		router.handle("packages.list", () => {
+			const pm = this.makePackageManager();
+			return { packages: pm.listConfiguredPackages() };
+		});
+		router.handle("packages.install", async (req) => {
+			const pm = this.makePackageManager();
+			await pm.installAndPersist(req.source);
+			return null;
+		});
+		router.handle("packages.remove", async (req) => {
+			const pm = this.makePackageManager();
+			await pm.removeAndPersist(req.source);
+			return null;
+		});
+		router.handle("pi.config.write_trust", (req) => {
+			const parsed: unknown = JSON.parse(req.content);
+			if (typeof parsed !== "object" || parsed === null) {
+				throw new Error("trust content must be a JSON object");
+			}
+			const agentDir = getAgentDir();
+			mkdirSync(agentDir, { recursive: true });
+			writeFileSync(
+				path.join(agentDir, "trust.json"),
+				JSON.stringify(parsed, null, 2) + "\n",
+				"utf8"
+			);
+			return null;
+		});
+		router.handle("pi.config.read", (req) => {
+			const agentDir = getAgentDir();
+			const fileName = req.name === "trust" ? "trust.json" : "keybindings.json";
+			const filePath = path.join(agentDir, fileName);
+			if (!existsSync(filePath)) return toJson({});
+			try {
+				return toJson(JSON.parse(readFileSync(filePath, "utf8")));
+			} catch (error) {
+				throw new Error(`${fileName} is not valid JSON: ${describeError(error)}`);
+			}
 		});
 		router.handle("pi.settings.get", () => {
 			if (this.settingsManager === null) return toJson({});
@@ -296,6 +391,17 @@ export class AuthService {
 				flow.rejectPrompt(new Error("login flow ended"));
 			}
 		}
+	}
+
+	private makePackageManager(): import("@earendil-works/pi-coding-agent").DefaultPackageManager {
+		if (this.settingsManager === null) throw new Error("settings not ready");
+		const { DefaultPackageManager } =
+			require("@earendil-works/pi-coding-agent") as typeof import("@earendil-works/pi-coding-agent");
+		return new DefaultPackageManager({
+			cwd: process.cwd(),
+			agentDir: getAgentDir(),
+			settingsManager: this.settingsManager,
+		});
 	}
 
 	// ---------------------------------------------------------------------------
