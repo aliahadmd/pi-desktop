@@ -463,37 +463,6 @@ export default function ChatPage(): React.JSX.Element {
 						</button>
 					</div>
 
-					{compactOpen && (
-						<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
-							<div className="w-[420px] rounded-xl border border-neutral-700 bg-neutral-900 p-5">
-								<h3 className="mb-1 text-sm font-semibold text-neutral-100">Compact context</h3>
-								<p className="mb-3 text-xs text-neutral-400">Summarizes older messages to free window space.</p>
-								<textarea value={compactInstructions} onChange={(e) => setCompactInstructions(e.target.value)} rows={3} placeholder="Optional instructions for the summary…" className="mb-4 w-full resize-none rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-blue-500" />
-								<div className="flex justify-end gap-2">
-									<button type="button" onClick={() => setCompactOpen(false)} className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700">Cancel</button>
-									<button type="button" data-testid="compact-confirm" disabled={compacting}
-										onClick={() => {
-											setCompacting(true);
-											void window.piDesktop.invoke({
-												type: "session.compact",
-												sessionId: active.id,
-												...(compactInstructions.length > 0 ? { customInstructions: compactInstructions } : {}),
-											}).then((r) => {
-												setCompacting(false);
-												if (!r.ok) { pushErrorNotice(active.id, r.error.message); }
-												else {
-													useSessions.getState().pushNotice(active.id, `Context compacted: ${String((r.data as any)?.tokensBefore ?? "?")} → ${String((r.data as any)?.estimatedTokensAfter ?? "?")} tokens.`, "info");
-												}
-												setCompactOpen(false);
-												setCompactInstructions("");
-											});
-										}}
-										className="rounded bg-purple-700 px-3 py-1.5 text-xs text-white hover:bg-purple-600 disabled:opacity-40"
-									>{compacting ? "Compacting…" : "Compact"}</button>
-								</div>
-							</div>
-						</div>
-					)}
 					<Composer
 						insertText={insertedText}
 						onInsertHandled={() => setInsertedText(null)}
