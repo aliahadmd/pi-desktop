@@ -47,7 +47,7 @@ export function Sidebar({
 			query: filter,
 		});
 		if (result.ok) setSessions(result.data.sessions);
-	}, []);
+	}, [filter]);
 
 	useEffect(() => {
 		void window.piDesktop.invoke({ type: "packages.list" }).then((r) => {
@@ -56,10 +56,13 @@ export function Sidebar({
 	}, []);
 
 	useEffect(() => {
-		void load();
-		if (collapsed) return; // rail mode: no DB polling needed
+		const debounce = setTimeout(() => void load(), 200);
+		if (collapsed) return () => clearTimeout(debounce);
 		const timer = setInterval(() => void load(), 10_000);
-		return () => clearInterval(timer);
+		return () => {
+			clearTimeout(debounce);
+			clearInterval(timer);
+		};
 	}, [filter, load, collapsed]);
 
 	// Group by cwd
