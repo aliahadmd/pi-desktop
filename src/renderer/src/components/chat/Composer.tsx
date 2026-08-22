@@ -24,6 +24,7 @@ export function Composer({
 	onBash,
 	onAbort,
 	onOpenPalette,
+	onOpenReview,
 	projectRoot,
 	modelName,
 }: {
@@ -35,6 +36,7 @@ export function Composer({
 	onBash(command: string, excludeFromContext: boolean): void;
 	onAbort(): void;
 	onOpenPalette(): void;
+	onOpenReview(): void;
 	projectRoot: string | null;
 	modelName?: string | undefined;
 	permissionMode?: "full" | "confirm" | "readonly";
@@ -200,7 +202,7 @@ export function Composer({
 					{git.behind > 0 && <span className="text-neutral-500">↓{git.behind}</span>}
 					<button
 						type="button"
-						onClick={onOpenPalette}
+						onClick={onOpenReview}
 						className="ml-auto rounded bg-neutral-800 px-1.5 py-0.5 text-[9px] text-neutral-300 hover:bg-neutral-700"
 					>
 						Open review

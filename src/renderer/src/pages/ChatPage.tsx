@@ -465,6 +465,7 @@ export default function ChatPage(): React.JSX.Element {
 						queueCount={active.queue.steering.length + active.queue.followUp.length}
 						projectRoot={active.cwd}
 						onOpenPalette={() => setDockTab("commands")}
+						onOpenReview={() => setDockTab("review")}
 						modelName={active.model?.name}
 						onSend={send}
 						onBash={runBash}
