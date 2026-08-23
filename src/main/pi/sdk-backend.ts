@@ -20,6 +20,7 @@ import {
 	type ModelRuntime as PiModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	PiCommandInfo,
 	PiEvent,
 	PiModelInfo,
 	PiSessionState,
@@ -288,19 +289,44 @@ export class SdkPiBackend implements IPiBackend {
 		return this.requireSession().messages.map((m) => toJson(m));
 	}
 
-	async getCommands(): Promise<Array<{ name: string; description?: string; source: string }>> {
+	async getCommands(): Promise<PiCommandInfo[]> {
 		const session = this.requireSession();
-		const prompts = session.resourceLoader.getPrompts().prompts.map((p) => ({
-			name: p.name,
-			description: p.description,
-			source: "prompt",
-		}));
-		const skills = session.resourceLoader.getSkills().skills.map((sk) => ({
-			name: `skill:${sk.name}`,
-			description: sk.description,
-			source: "skill",
-		}));
-		return [...prompts, ...skills];
+		const prompts = session.resourceLoader.getPrompts().prompts.map(
+			(p): PiCommandInfo => ({
+				name: p.name,
+				description: p.description,
+				source: "prompt",
+				path: p.filePath,
+				...(p.argumentHint !== undefined ? { argumentHint: p.argumentHint } : {}),
+			})
+		);
+		const skills = session.resourceLoader.getSkills().skills.map(
+			(sk): PiCommandInfo => ({
+				name: `skill:${sk.name}`,
+				description: sk.description,
+				source: "skill",
+				path: sk.filePath,
+			})
+		);
+		// Extension-registered slash commands were missing entirely, so packages
+		// that register commands were invisible in SDK sessions (the default).
+		// Upstream builds its own catalog the same way; the runner may throw if
+		// extensions failed to load, so treat it as best-effort.
+		let extensions: PiCommandInfo[] = [];
+		try {
+			extensions = session.extensionRunner.getRegisteredCommands().map(
+				(command): PiCommandInfo => ({
+					name: command.invocationName,
+					...(command.description !== undefined ? { description: command.description } : {}),
+					source: "extension",
+					// No `path`: handlers are code, not fetchable markdown. The
+					// browser degrades these to a plain `/name` insert.
+				})
+			);
+		} catch {
+			extensions = [];
+		}
+		return [...extensions, ...prompts, ...skills];
 	}
 
 	async getStats(): Promise<JsonValue> {
