@@ -1,5 +1,5 @@
 /**
- * Window wiring guards (plans/008, audit 4 finding H-1): the bug was a window
+ * Window wiring guards (audit 4 finding H-1): the bug was a window
  * recreated via Dock-icon activate that never registered with the renderer
  * event bus — every main→renderer event then dropped forever. These are
  * source-level pins of the invariant "window creation and bus registration

@@ -10,8 +10,8 @@ this file is the working rulebook. Read both before changing anything.
 2. `src/shared/pi.ts` — every IPC channel with its typebox schema. This is the
    map of what the app can do.
 3. `aboutproject.md` — why the architecture is what it is.
-4. `plans/README.md` + `pibugs/pibugs3.md` — current remediation state; three
-   audits' findings are all fixed, with the reasoning for rejections recorded.
+4. `pibugs/` — audit findings and their remediation state; four audits'
+   findings are all fixed, with the reasoning for rejections recorded.
 5. Upstream docs when touching pi integration: `../pi/packages/coding-agent/docs/`
    (`sdk.md`, `rpc.md`, `session-format.md`, `extensions.md`).
 

@@ -5,6 +5,7 @@ release/
 .DS_Store
 piplan/
 pibugs/
+plans/
 
 # Python bytecode from the sidecar
 __pycache__/

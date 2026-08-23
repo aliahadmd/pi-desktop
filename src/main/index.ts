@@ -67,7 +67,7 @@ let tray: Tray | undefined;
 /**
  * Set once services exist, then used by activate/second-instance to spawn
  * replacement windows through the SAME path as boot — so every window gets
- * registered with the renderer event bus. See plans/008.
+ * registered with the renderer event bus. See audit 4 finding H-1.
  */
 let spawnMainWindowRef: (() => BrowserWindow) | undefined;
 
@@ -298,7 +298,7 @@ app.whenReady()
 		 * Single window-spawning path shared by boot, activate, and
 		 * second-instance. Every window created through here is registered
 		 * with the renderer event bus; without this, a window reopened from
-		 * the Dock would never receive another pi event (plans/008 H-1).
+		 * the Dock would never receive another pi event (audit 4 finding H-1).
 		 */
 		const spawnMainWindow = (): BrowserWindow => {
 			const store = storeService;
