@@ -128,14 +128,17 @@ describe("settings channels over IPC", () => {
 });
 
 describe("settings UI", () => {
-	it("renders models sheet with providers via sidebar", async () => {
+	it("renders models sheet with providers via the profile menu", async () => {
+		await page.getByTestId("sidebar-profile").click();
+		await page.getByTestId("sidebar-profile-menu").waitFor({ timeout: 10_000 });
 		await page.getByTestId("sidebar-models").click();
 		await page.getByTestId("sheet-models").waitFor({ timeout: 10_000 });
 		await page.getByText("Providers").first().waitFor({ timeout: 10_000 });
 		await page.getByText("Close · Esc").first().click();
 	});
 
-	it("renders settings sheet via sidebar", async () => {
+	it("renders settings sheet via the profile menu", async () => {
+		await page.getByTestId("sidebar-profile").click();
 		await page.getByTestId("sidebar-settings").click();
 		await page.getByTestId("sheet-settings").waitFor({ timeout: 10_000 });
 		await page.getByText("Default provider").first().waitFor({ timeout: 10_000 });

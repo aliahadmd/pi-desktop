@@ -130,6 +130,8 @@ export function Sidebar({
 	const [resuming, setResuming] = useState<Set<string>>(new Set());
 	const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 	const [userName, setUserName] = useState("");
+	// Profile footer menu (Models / Settings / Trust / History).
+	const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
 	async function create(backend: "sdk" | "rpc"): Promise<void> {
 		setCreateError(null);
@@ -149,6 +151,26 @@ export function Sidebar({
 			data as unknown as import("../../../../shared/pi").SessionOpenedResponse
 		);
 	}
+
+	// Close the profile menu on Escape or any click outside the footer card.
+	useEffect(() => {
+		if (!profileMenuOpen) return;
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") setProfileMenuOpen(false);
+		};
+		const onClick = (e: MouseEvent): void => {
+			const t = e.target as Element | null;
+			if (t?.closest?.("[data-testid='sidebar-profile']") !== null) return;
+			if (t?.closest?.("[data-testid='sidebar-profile-menu']") !== null) return;
+			setProfileMenuOpen(false);
+		};
+		window.addEventListener("keydown", onKey);
+		window.addEventListener("mousedown", onClick, true);
+		return () => {
+			window.removeEventListener("keydown", onKey);
+			window.removeEventListener("mousedown", onClick, true);
+		};
+	}, [profileMenuOpen]);
 
 	if (collapsed) {
 		return (
@@ -421,30 +443,70 @@ export function Sidebar({
 				</div>
 			)}
 
-			{/* Footer */}
-			{/* User profile bar */}
-			<div className="flex items-center gap-2 border-t border-neutral-800 px-3 py-2">
-				<span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-950 text-[10px] font-medium text-blue-400">
-					{initialsOf(userName)}
-				</span>
-				<span className="min-w-0 flex-1 truncate text-xs text-neutral-400">
-					{userName.length > 0 ? userName : "—"}
-				</span>
+			{/* Footer: grouped profile card. Clicking the profile opens the
+			    option menu (Models / Settings / Trust / History); the gear is a
+			    direct shortcut to Settings. */}
+			<div className="relative border-t border-neutral-800 p-1.5">
 				<button
 					type="button"
-					title="Settings"
-					onClick={() => onOpenSheet("settings")}
-					className="rounded px-1 text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+					data-testid="sidebar-profile"
+					title="Account & options"
+					aria-haspopup="menu"
+					aria-expanded={profileMenuOpen}
+					onClick={() => setProfileMenuOpen((v) => !v)}
+					className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-neutral-900 ${
+						profileMenuOpen ? "bg-neutral-900" : ""
+					}`}
 				>
-					⚙
+					<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-950 text-[10px] font-medium text-blue-400">
+						{initialsOf(userName)}
+					</span>
+					<span className="min-w-0 flex-1 truncate text-xs text-neutral-400">
+						{userName.length > 0 ? userName : "—"}
+					</span>
+					<span
+						className={`text-[9px] text-neutral-600 transition-transform ${profileMenuOpen ? "rotate-180" : ""}`}
+					>
+						▲
+					</span>
 				</button>
-			</div>
 
-			<div className="grid grid-cols-4 gap-1 border-t border-neutral-800 p-1.5">
-				<button type="button" data-testid="sidebar-models" onClick={() => onOpenSheet("models")} className="rounded px-1 py-1.5 text-[10px] text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200">Models</button>
-				<button type="button" data-testid="sidebar-settings" onClick={() => onOpenSheet("settings")} className="rounded px-1 py-1.5 text-[10px] text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200">Settings</button>
-				<button type="button" data-testid="sidebar-trust" onClick={() => onOpenSheet("trust")} className="rounded px-1 py-1.5 text-[10px] text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200">Trust</button>
-				<button type="button" data-testid="sidebar-history" onClick={() => onOpenSheet("browse")} className="rounded px-1 py-1.5 text-[10px] text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200">History</button>
+				{/* No AnimatePresence here on purpose: a pending exit animation leaves
+				    an invisible, pointer-events-auto ghost over the sidebar if the
+				    app state changes mid-transition. Immediate unmount cannot stick. */}
+				{profileMenuOpen && (
+					<motion.div
+						initial={{ opacity: 0, y: 6 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.12 }}
+						role="menu"
+						data-testid="sidebar-profile-menu"
+						className="absolute bottom-full left-1.5 right-1.5 z-50 mb-2 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900 shadow-xl shadow-black/50"
+					>
+							{(
+							[
+								["models", "Models", "sidebar-models"],
+								["settings", "Settings", "sidebar-settings"],
+								["trust", "Trust", "sidebar-trust"],
+								["browse", "History", "sidebar-history"],
+							] as const
+						).map(([kind, label, testid]) => (
+							<button
+								key={kind}
+								type="button"
+								role="menuitem"
+								data-testid={testid}
+								onClick={() => {
+									setProfileMenuOpen(false);
+									onOpenSheet(kind);
+								}}
+								className="block w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-neutral-800"
+							>
+								{label}
+							</button>
+						))}
+					</motion.div>
+				)}
 			</div>
 		</div>
 	);

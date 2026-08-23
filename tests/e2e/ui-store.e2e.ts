@@ -64,7 +64,9 @@ describe("app shell", () => {
 		await page.getByText("No open sessions.").first().waitFor({ timeout: 10_000 });
 	});
 
-	it("opens the sessions browser sheet from the sidebar and closes it", async () => {
+	it("opens the sessions browser sheet from the profile menu and closes it", async () => {
+		await page.getByTestId("sidebar-profile").click();
+		await page.getByTestId("sidebar-profile-menu").waitFor({ timeout: 10_000 });
 		await page.getByTestId("sidebar-history").click();
 		await page.getByTestId("sheet-browse").waitFor({ timeout: 10_000 });
 		await page.getByText("Usage (14 days)").first().waitFor({ timeout: 10_000 });
