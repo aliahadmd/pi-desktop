@@ -270,11 +270,14 @@ describe("regression: escaped absolute positioning (plan 003)", () => {
 	});
 });
 
-describe("regression: approval extension is wired into PiService", () => {
-	it("main/index.ts loads the desktop approval extension", () => {
+describe("regression: permission extension is wired into PiService", () => {
+	it("main/index.ts loads the desktop permission extension unconditionally", () => {
 		const source = readFileSync(path.join(ROOT, "src/main/index.ts"), "utf8");
 		expect(source).toContain("setExtensionFactories");
-		expect(source).toContain("pi-desktop-approve");
+		expect(source).toContain("pi-desktop-permissions");
+		// The mode extension must always be registered (it no-ops in bypass);
+		// conditional registration was the old boolean gate's design.
+		expect(source).not.toContain('"pi-desktop-approve"');
 	});
 });
 
@@ -287,10 +290,12 @@ describe("regression: no dead extensionPaths plumbing remains", () => {
 	});
 });
 
-describe("regression: approval gate defaults to enabled", () => {
-	it("an unset confirmBeforeApply setting means the gate is on", () => {
+describe("regression: legacy confirmBeforeApply migrates once", () => {
+	it("boot reads the legacy setting and persists a permissionMode default", () => {
 		const source = readFileSync(path.join(ROOT, "src/main/index.ts"), "utf8");
-		expect(source).toContain('getSettingRaw("confirmBeforeApply") !== false');
+		expect(source).toContain('getSettingRaw("confirmBeforeApply")');
+		expect(source).toContain('setSettingRaw("permissionMode"');
+		expect(source).toContain("isPermissionMode(stored)");
 	});
 });
 

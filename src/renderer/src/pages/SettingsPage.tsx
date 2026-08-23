@@ -2,7 +2,15 @@
  * Settings page: Pi settings editor (typed form for common keys) + app info.
  */
 import { useCallback, useEffect, useState } from "react";
-import { piThinkingLevels } from "../../../shared/pi";
+import {
+	piThinkingLevels,
+	permissionModes,
+	PERMISSION_MODE_LABEL,
+	DEFAULT_PERMISSION_MODE,
+	isPermissionMode,
+	type PermissionMode,
+} from "../../../shared/pi";
+import { MODE_DESCRIPTION } from "../components/chat/ModePicker";
 import { ScopedModelsEditor } from "./ScopedModelsEditor";
 import { PackagesPanel } from "./PackagesPanel";
 
@@ -148,10 +156,10 @@ export function SettingsPage(): React.JSX.Element {
 				<div className="mt-8 border-t border-neutral-800 pt-5">
 					<div className="mb-2 text-sm text-neutral-200">Safety</div>
 					<SettingRow
-						label="Confirm before apply"
-						hint="Ask before the agent runs bash or edits files. Applies to new sessions."
+						label="Default permission mode"
+						hint="Applied to new sessions. Can be changed per session from the composer."
 					>
-						<ApprovalToggle />
+						<DefaultModePicker />
 					</SettingRow>
 				</div>
 
@@ -219,37 +227,51 @@ function Toggle({
 }
 
 
-function ApprovalToggle(): React.JSX.Element {
-	const [enabled, setEnabled] = useState(true);
+function DefaultModePicker(): React.JSX.Element {
+	const [mode, setMode] = useState<PermissionMode>(DEFAULT_PERMISSION_MODE);
 
 	useEffect(() => {
 		void window.piDesktop
-			.invoke({ type: "app.settings.get", key: "confirmBeforeApply" })
+			.invoke({ type: "app.settings.get", key: "permissionMode" })
 			.then((r) => {
-				if (r.ok && r.data !== null) setEnabled(r.data === true);
+				if (r.ok && isPermissionMode(r.data)) setMode(r.data);
 			});
 	}, []);
 
 	return (
-		<button
-			type="button"
-			onClick={() => {
-				const next = !enabled;
-				setEnabled(next);
-				void window.piDesktop.invoke({
-					type: "app.settings.set",
-					key: "confirmBeforeApply",
-					value: JSON.stringify(next),
-				});
-			}}
-			className={`h-5 w-9 rounded-full transition ${enabled ? "bg-blue-600" : "bg-neutral-700"}`}
-		>
-			<span
-				className={`block h-4 w-4 rounded-full bg-white transition ${
-					enabled ? "ml-[18px]" : "ml-0.5"
-				}`}
-			/>
-		</button>
+		<div className="flex flex-col gap-1.5" data-testid="settings-default-mode">
+			{permissionModes.map((m) => (
+				<label
+					key={m}
+					className="flex cursor-pointer items-center gap-2.5 text-xs text-neutral-300"
+				>
+					<input
+						type="radio"
+						name="defaultPermissionMode"
+						checked={mode === m}
+						onChange={() => {
+							setMode(m);
+							void window.piDesktop.invoke({
+								type: "app.settings.set",
+								key: "permissionMode",
+								value: JSON.stringify(m),
+							});
+							void window.piDesktop.invoke({
+								type: "permission.set_default",
+								mode: m,
+							});
+						}}
+						className="h-3.5 w-3.5 accent-blue-600"
+					/>
+					<span>
+						{PERMISSION_MODE_LABEL[m]}
+						<span className="ml-1.5 text-[10px] text-neutral-500">
+							{MODE_DESCRIPTION[m]}
+						</span>
+					</span>
+				</label>
+			))}
+		</div>
 	);
 }
 

@@ -4,7 +4,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, GitBranch, X } from "lucide-react";
-import type { PiImageInput, PiModelInfo, PiThinkingLevel } from "../../../../shared/pi";
+import type { PiImageInput, PiModelInfo, PiThinkingLevel, PermissionMode } from "../../../../shared/pi";
+import { ModePicker } from "./ModePicker";
 import { ModelPicker } from "./ModelPicker";
 import { ThinkingPicker } from "./ThinkingPicker";
 
@@ -35,6 +36,8 @@ export function Composer({
 	models,
 	currentModel,
 	onPickModel,
+	permissionMode,
+	onPickPermissionMode,
 	thinkingLevel,
 	supportedThinkingLevels,
 	onPickThinkingLevel,
@@ -54,6 +57,9 @@ export function Composer({
 	models?: PiModelInfo[] | undefined;
 	currentModel?: { provider: string; id: string; name: string } | undefined;
 	onPickModel?(model: PiModelInfo): void;
+	/** Agent autonomy mode; omit to hide the picker. */
+	permissionMode?: PermissionMode | undefined;
+	onPickPermissionMode?(mode: PermissionMode): void;
 	/** Reasoning-effort selector; omit to hide the control entirely. */
 	thinkingLevel?: PiThinkingLevel | undefined;
 	supportedThinkingLevels?: PiThinkingLevel[] | undefined;
@@ -352,6 +358,12 @@ export function Composer({
 						</>
 					) : (
 						<>
+							{permissionMode !== undefined && (
+								<ModePicker
+									mode={permissionMode}
+									onPick={(m) => onPickPermissionMode?.(m)}
+								/>
+							)}
 							{modelName !== undefined && (
 								<ModelPicker
 									models={models ?? []}

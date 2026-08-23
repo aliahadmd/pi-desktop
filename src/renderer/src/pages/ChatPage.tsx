@@ -14,7 +14,13 @@ import {
 	Search,
 	X,
 } from "lucide-react";
-import type { PiImageInput, PiModelInfo, PiThinkingLevel } from "../../../shared/pi";
+import type {
+	PiImageInput,
+	PiModelInfo,
+	PiThinkingLevel,
+	PermissionMode,
+} from "../../../shared/pi";
+import { DEFAULT_PERMISSION_MODE, isPermissionMode } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
 import { nextActiveTerminalTab } from "../lib/terminal-tabs";
 import { Transcript } from "../components/chat/Transcript";
@@ -71,6 +77,10 @@ export default function ChatPage({
 	// Model catalog for the composer's searchable picker. Loaded once per
 	// active session (the catalog is session-scoped upstream).
 	const [catalog, setCatalog] = useState<PiModelInfo[]>([]);
+	// Permission mode for the active session (session override or default).
+	const [permissionMode, setPermissionMode] = useState<PermissionMode>(
+		DEFAULT_PERMISSION_MODE,
+	);
 	// Thinking levels supported by the active model; re-fetched when it changes.
 	const [thinkingSupported, setThinkingSupported] = useState<PiThinkingLevel[]>([]);
 	const play = (event: SoundEvent): void => {
@@ -87,6 +97,24 @@ export default function ChatPage({
 			.invoke({ type: "session.models", sessionId: activeId })
 			.then((r) => {
 				if (!cancelled && r.ok) setCatalog(r.data.models);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [activeId]);
+
+	// Seed the permission mode when the active session changes.
+	useEffect(() => {
+		setPermissionMode(DEFAULT_PERMISSION_MODE);
+		if (activeId === null) return;
+		let cancelled = false;
+		void window.piDesktop
+			.invoke({ type: "permission.get_mode", sessionId: activeId })
+			.then((r) => {
+				if (!cancelled && r.ok && isPermissionMode(r.data.mode)) {
+					setPermissionMode(r.data.mode);
+				}
 			})
 			.catch(() => {});
 		return () => {
@@ -539,9 +567,23 @@ export default function ChatPage({
 							queueCount={active.queue.steering.length + active.queue.followUp.length}
 							projectRoot={active.cwd}
 							onOpenPalette={() => setDockTab("commands")}
-						onOpenReview={() => setDockTab("review")}
-						modelName={active.model?.name}
-						models={catalog}
+							onOpenReview={() => setDockTab("review")}
+							modelName={active.model?.name}
+							permissionMode={permissionMode}
+							onPickPermissionMode={(mode) => {
+								if (activeId === null) return;
+								const previous = permissionMode;
+								setPermissionMode(mode); // optimistic
+								void window.piDesktop
+									.invoke({ type: "permission.set_mode", sessionId: activeId, mode })
+									.then((r) => {
+										if (!r.ok) {
+											setPermissionMode(previous); // roll back
+											pushErrorNotice(active.id, r.error.message);
+										}
+									});
+							}}
+							models={catalog}
 						currentModel={active.model}
 						onPickModel={(m) => {
 							if (activeId === null) return;
