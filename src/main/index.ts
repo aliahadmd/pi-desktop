@@ -161,6 +161,12 @@ app.whenReady()
 		router.handle("workspace.open_in_editor", async (req) => {
 			const scoped = await bridge.assertRealScoped(req.path);
 			const line = req.line;
+			// Packaged macOS apps inherit a minimal PATH from launchd, so `code`
+			// is usually absent: the spawn emits ENOENT and the whole handler used
+			// to resolve without opening anything at all. Every exit now routes
+			// through one decision, and the default app opens unless `code`
+			// demonstrably launched.
+			let launched = false;
 			try {
 				// Prefer VS Code goto-line when the CLI exists; fall back to default app.
 				const { spawn } = await import("node:child_process");
@@ -169,15 +175,20 @@ app.whenReady()
 				});
 				await new Promise<void>((resolve) => {
 					child.on("error", () => resolve());
+					child.on("spawn", () => {
+						launched = true;
+					});
 					child.on("exit", (code) => {
-						if (code !== 0) void shell.openPath(scoped);
+						// A non-zero exit means it ran but refused the file.
+						if (code !== 0) launched = false;
 						resolve();
 					});
 					setTimeout(() => resolve(), 3000);
 				});
 			} catch {
-				await shell.openPath(scoped);
+				launched = false;
 			}
+			if (!launched) await shell.openPath(scoped);
 			return null;
 		});
 
