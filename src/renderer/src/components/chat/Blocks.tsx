@@ -70,13 +70,18 @@ const ToolBlockView = memo(function ToolBlockView({
 			: block.status === "error"
 				? "text-red-400"
 				: "text-green-500";
+	// Direct `!`/`!!` composer bash gets a requestId ("bash-…"/"rpc-bash") as its
+	// block id; agent-driven bash tool calls must go through session.abort instead.
+	const isDirectBash =
+		block.toolName === "bash" &&
+		(block.id === "rpc-bash" || block.id.startsWith("bash-"));
 	return (
 		<div className="px-4 py-1" data-kind="tool" data-tool={block.toolName}>
-			<div className="rounded-lg border border-neutral-800 bg-neutral-900/60">
+			<div className="flex items-center rounded-lg border border-neutral-800 bg-neutral-900/60">
 				<button
 					type="button"
 					onClick={() => toggleExpanded(key, fallback)}
-					className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
+					className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-xs"
 				>
 					<span className={statusCls}>{statusIcon}</span>
 					<span className="font-medium text-neutral-300">{block.toolName}</span>
@@ -87,18 +92,31 @@ const ToolBlockView = memo(function ToolBlockView({
 					)}
 					<span className="ml-auto text-[10px] text-neutral-600">{expanded ? "−" : "+"}</span>
 				</button>
-				{expanded && block.output.length > 0 && (
-					<div className="border-t border-neutral-800 p-3">
-						{isDiffOutput ? (
-							<DiffView diff={block.output} />
-						) : (
-							<pre className="max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-neutral-300">
-								<Ansi>{block.output.slice(0, 20_000)}</Ansi>
-							</pre>
-						)}
-					</div>
+				{isDirectBash && block.status === "running" && (
+					<button
+						type="button"
+						data-testid="bash-stop"
+						title="Kill this shell command"
+						onClick={() => {
+							void window.piDesktop.invoke({ type: "session.abort_bash", sessionId });
+						}}
+						className="mr-2 shrink-0 rounded bg-red-900/70 px-1.5 py-0.5 text-[9px] text-red-300 hover:bg-red-800"
+					>
+						stop
+					</button>
 				)}
 			</div>
+			{expanded && block.output.length > 0 && (
+				<div className="rounded-lg border-t border-neutral-800 p-3">
+					{isDiffOutput ? (
+						<DiffView diff={block.output} />
+					) : (
+						<pre className="max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-neutral-300">
+							<Ansi>{block.output.slice(0, 20_000)}</Ansi>
+						</pre>
+					)}
+				</div>
+			)}
 		</div>
 	);
 });

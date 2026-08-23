@@ -46,7 +46,7 @@ export function StatusBar({
 
 	return (
 		<div className="flex h-8 shrink-0 items-center gap-3 border-t border-neutral-800 px-4 font-mono text-[10px] text-neutral-400">
-			<span className="flex items-center gap-1.5">
+			<span className="flex items-center gap-1.5" data-testid="status-phase">
 				<span className={`h-1.5 w-1.5 rounded-full ${phase.cls}`} />
 				{phase.text}
 			</span>

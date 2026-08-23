@@ -8,7 +8,7 @@ import { execSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import type { ElectronApplication, Page } from "playwright-core";
 
 let electronApp: ElectronApplication;
@@ -75,8 +75,13 @@ describe("golden path", () => {
 			.first()
 			.waitFor({ timeout: 15_000 });
 
-		// Status bar reflects activity state after settle.
-		await expect(page.getByText("idle").first()).toBeTruthy();
+		// Status bar reflects activity state after settle. Wait retried on the
+		// phase indicator (the old `toBeTruthy()` on a bare Locator asserted
+		// nothing — audit L-4).
+		await page
+			.getByTestId("status-phase")
+			.getByText("idle", { exact: true })
+			.waitFor({ timeout: 15_000 });
 	}, 60_000);
 
 	it("queues a second message while streaming is not required after settle", async () => {

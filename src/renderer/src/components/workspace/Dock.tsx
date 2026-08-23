@@ -35,26 +35,44 @@ function ExplorerRow({
 	depth,
 	expanded,
 	onToggle,
+	onOpenInEditor,
 }: {
 	entry: FsEntry;
 	full: string;
 	depth: number;
 	expanded: boolean;
 	onToggle(): void;
+	onOpenInEditor?(path: string): void;
 }): React.JSX.Element {
 	return (
-		<button
-			type="button"
-			onClick={onToggle}
-			className={`block w-full truncate px-3 py-0.5 text-left text-xs hover:bg-neutral-800/60 ${
-				entry.type === "dir" ? "text-neutral-300" : "text-neutral-400"
+		<div
+			className={`group flex items-center hover:bg-neutral-800/60 ${
+				entry.type === "dir" ? "" : "text-neutral-400"
 			}`}
 			style={{ paddingLeft: `${depth * 12 + 12}px` }}
-			title={full}
 		>
-			{entry.type === "dir" ? (expanded ? "▾ " : "▸ ") : ""}
-			{entry.name}
-		</button>
+			<button
+				type="button"
+				onClick={onToggle}
+				className={`min-w-0 flex-1 truncate py-0.5 pr-2 text-left text-xs ${
+					entry.type === "dir" ? "text-neutral-300" : "text-neutral-400"
+				}`}
+				title={full}
+			>
+				{entry.type === "dir" ? (expanded ? "▾ " : "▸ ") : ""}
+				{entry.name}
+			</button>
+			{entry.type === "file" && onOpenInEditor !== undefined && (
+				<button
+					type="button"
+					title="Open in editor"
+					onClick={() => onOpenInEditor(full)}
+					className="mr-2 hidden shrink-0 rounded px-1 text-[10px] text-neutral-600 hover:text-neutral-200 group-hover:block"
+				>
+					↗
+				</button>
+			)}
+		</div>
 	);
 }
 
@@ -111,6 +129,14 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 		}
 	}
 
+	function openInEditor(path: string): void {
+		void window.piDesktop
+			.invoke({ type: "workspace.open_in_editor", path })
+			.then((r) => {
+				if (!r.ok) setError(r.error.message);
+			});
+	}
+
 	function renderDir(dir: string, depth: number): ReactNode[] {
 		const entries = dir === cwd ? listings.get(cwd) : listings.get(dir);
 		if (entries === undefined) return [];
@@ -126,34 +152,36 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 				</div>
 			);
 		}
-		for (const entry of entries) {
-			const full = `${dir}/${entry.name}`;
-			if (entry.type === "dir") {
-				const isOpen = expandedDirs.has(full);
-				out.push(
-					<ExplorerRow
-						key={`e-${full}`}
-						entry={entry}
-						full={full}
-						depth={depth}
-						expanded={isOpen}
-						onToggle={() => toggleDir(full)}
-					/>
-				);
-				if (isOpen) out.push(...renderDir(full, depth + 1));
-			} else {
-				out.push(
-					<ExplorerRow
-						key={`e-${full}`}
-						entry={entry}
-						full={full}
-						depth={depth}
-						expanded={false}
-						onToggle={() => void openFile(full)}
-					/>
-				);
+			for (const entry of entries) {
+				const full = `${dir}/${entry.name}`;
+				if (entry.type === "dir") {
+					const isOpen = expandedDirs.has(full);
+					out.push(
+						<ExplorerRow
+							key={`e-${full}`}
+							entry={entry}
+							full={full}
+							depth={depth}
+							expanded={isOpen}
+							onToggle={() => toggleDir(full)}
+							onOpenInEditor={openInEditor}
+						/>
+					);
+					if (isOpen) out.push(...renderDir(full, depth + 1));
+				} else {
+					out.push(
+						<ExplorerRow
+							key={`e-${full}`}
+							entry={entry}
+							full={full}
+							depth={depth}
+							expanded={false}
+							onToggle={() => void openFile(full)}
+							onOpenInEditor={openInEditor}
+						/>
+					);
+				}
 			}
-		}
 		return out;
 	}
 

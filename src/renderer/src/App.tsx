@@ -5,7 +5,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
-import ChatPage from "./pages/ChatPage";
+import ChatPage, { refreshState } from "./pages/ChatPage";
+import type { AuthPromptEvent } from "../../shared/protocol";
 import { ModelsPage } from "./pages/ModelsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TrustPanel } from "./pages/TrustPanel";
@@ -23,6 +24,35 @@ export default function App(): React.JSX.Element {
 	const [onboardingChecked, setOnboardingChecked] = useState(false);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const [sheet, setSheet] = useState<SheetKind>(null);
+	const activeSessionId = useSessions((s) => s.activeId);
+	const [loginPrompt, setLoginPrompt] = useState<AuthPromptEvent | null>(null);
+	const [loginValue, setLoginValue] = useState("");
+
+	// OAuth flows that need pasted input (e.g. a redirect URL) surface as
+	// auth_prompt bus events; without this listener they hang until timeout.
+	useEffect(() => {
+		return window.piDesktop.on((event) => {
+			if (event.type === "auth_prompt") {
+				setLoginValue("");
+				setLoginPrompt(event);
+			}
+			if (event.type === "auth_notify") {
+				setLoginPrompt((current) =>
+					current !== null && current.loginId === event.loginId ? null : current
+				);
+			}
+		});
+	}, []);
+
+	function respondLogin(value: string): void {
+		if (loginPrompt === null) return;
+		void window.piDesktop.invoke({
+			type: "auth.respond_login",
+			loginId: loginPrompt.loginId,
+			value,
+		});
+		setLoginPrompt(null);
+	}
 
 	useEffect(() => bindPiEvents(), []);
 
@@ -95,7 +125,7 @@ export default function App(): React.JSX.Element {
 					)}
 				</AnimatePresence>
 
-				<ChatPage />
+				<ChatPage onOpenSheet={(kind) => setSheet(kind)} />
 
 
 			</main>
@@ -108,6 +138,25 @@ export default function App(): React.JSX.Element {
 				testId="sheet-models"
 			>
 				<ModelsPage
+					sessionOpen={activeSessionId !== null}
+					onUseInSession={(provider, modelId) => {
+						if (activeSessionId === null) return;
+						void window.piDesktop
+							.invoke({
+								type: "session.set_model",
+								sessionId: activeSessionId,
+								provider,
+								modelId,
+							})
+							.then((r) => {
+								if (r.ok) {
+									refreshState(activeSessionId);
+								} else {
+									useSessions.getState().pushErrorNotice(activeSessionId, r.error.message);
+								}
+							});
+						setSheet(null);
+					}}
 					onUseWithSession={(provider, modelId) => {
 						void window.piDesktop.invoke({
 							type: "session.default_model",
@@ -155,6 +204,49 @@ export default function App(): React.JSX.Element {
 					}}
 				/>
 			</Sheet>
+
+			{loginPrompt !== null && (
+				<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
+					<div className="w-[440px] rounded-xl border border-neutral-700 bg-neutral-900 p-5" data-testid="auth-login-prompt">
+						<h3 className="mb-1 text-sm font-semibold text-neutral-100">
+							{loginPrompt.providerId} login
+						</h3>
+						<p className="mb-3 text-xs break-words text-neutral-400">
+							{typeof loginPrompt.prompt === "string"
+								? loginPrompt.prompt
+								: "This provider needs input to finish the login."}
+						</p>
+						<input
+							autoFocus
+							value={loginValue}
+							onChange={(e) => setLoginValue(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") respondLogin(loginValue);
+								if (e.key === "Escape") respondLogin("");
+							}}
+							placeholder="Paste the value and press Enter…"
+							className="mb-4 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-blue-500"
+						/>
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => respondLogin("")}
+								className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								data-testid="auth-login-submit"
+								onClick={() => respondLogin(loginValue)}
+								className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500"
+							>
+								Submit
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

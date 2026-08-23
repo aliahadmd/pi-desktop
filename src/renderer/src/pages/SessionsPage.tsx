@@ -29,6 +29,15 @@ interface DailyUsage {
 	requests: number;
 }
 
+/** Row of the sidecar's /analytics/top-sessions aggregation. */
+interface TopSessionRow {
+	id: string | null;
+	name: string | null;
+	cwd: string | null;
+	tokens: number;
+	cost_usd: number;
+}
+
 type SidecarStatus = "starting" | "healthy" | "degraded" | "stopped";
 
 function relTime(ts: number | null): string {
@@ -55,6 +64,7 @@ export function SessionsPage({
 	const [busy, setBusy] = useState(false);
 	const [sidecarStatus, setSidecarStatus] = useState<SidecarStatus>("stopped");
 	const [hits, setHits] = useState<SidecarSearchHit[] | null>(null);
+	const [top, setTop] = useState<TopSessionRow[]>([]);
 
 	useEffect(() => {
 		return window.piDesktop.on((event) => {
@@ -96,6 +106,14 @@ export function SessionsPage({
 		}
 		const total = await window.piDesktop.invoke({ type: "db.usage.totals" });
 		if (total.ok) setTotals(total.data);
+		// Top sessions come from the sidecar's FTS/analytics tables only; the
+		// panel simply stays hidden when the sidecar is not running.
+		const topResult = await window.piDesktop.invoke({ type: "sidecar.top", by: "cost", limit: 5 });
+		if (topResult.ok && topResult.data !== null) {
+			setTop(topResult.data as unknown as TopSessionRow[]);
+		} else {
+			setTop([]);
+		}
 	}, []);
 
 	useEffect(() => {
@@ -306,6 +324,35 @@ export function SessionsPage({
 								</div>
 							);
 						})}
+					</div>
+				)}
+				{top.length > 0 && (
+					<div className="mt-4">
+						<h3 className="mb-2 text-xs font-semibold tracking-wide text-neutral-400 uppercase">
+							Top sessions
+						</h3>
+						<div className="flex flex-col gap-1">
+							{top.map((t) => {
+								const target = t.id !== null ? sessions.find((s) => s.id === t.id) : undefined;
+								return (
+									<button
+										key={t.id ?? t.cwd ?? t.name}
+										type="button"
+										disabled={target === undefined}
+										onClick={() => target !== undefined && void resume(target)}
+										title={target !== undefined ? "Resume this session" : (t.cwd ?? undefined)}
+										className="flex items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-neutral-900 disabled:cursor-default"
+									>
+										<span className="min-w-0 flex-1 truncate text-[11px] text-neutral-300">
+											{t.name ?? t.cwd?.split("/").pop() ?? "session"}
+										</span>
+										<span className="shrink-0 font-mono text-[10px] text-neutral-500">
+											${t.cost_usd.toFixed(4)}
+										</span>
+									</button>
+								);
+							})}
+						</div>
 					</div>
 				)}
 			</div>

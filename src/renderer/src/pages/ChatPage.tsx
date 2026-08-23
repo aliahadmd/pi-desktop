@@ -19,8 +19,10 @@ import {
 	SessionTreePanel,
 } from "../components/workspace/Dock";
 import { TerminalPanel } from "../components/workspace/TerminalPanel";
+import { CommandPalette } from "../components/chat/CommandPalette";
 
 type DockTab = "files" | "review" | "commands" | "tree" | "terminal" | null;
+type SheetKind = "models" | "settings" | "trust" | "browse" | "packages";
 
 export function refreshState(sessionId: string): void {
 	void window.piDesktop
@@ -30,7 +32,11 @@ export function refreshState(sessionId: string): void {
 		});
 }
 
-export default function ChatPage(): React.JSX.Element {
+export default function ChatPage({
+	onOpenSheet,
+}: {
+	onOpenSheet?(kind: SheetKind): void;
+}): React.JSX.Element {
 	const sessions = useSessions((s) => s.sessions);
 	const activeId = useSessions((s) => s.activeId);
 	const open = useSessions((s) => s.open);
@@ -49,6 +55,7 @@ export default function ChatPage(): React.JSX.Element {
 	const [activeTermTab, setActiveTermTab] = useState(0);
 	const [nextTermNum, setNextTermNum] = useState(2);
 	const [compactOpen, setCompactOpen] = useState(false);
+	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [compactInstructions, setCompactInstructions] = useState("");
 	const [compacting, setCompacting] = useState(false);
 	const [insertedText, setInsertedText] = useState<string | null>(null);
@@ -79,12 +86,17 @@ export default function ChatPage(): React.JSX.Element {
 		return () => clearTimeout(t);
 	}, [dockWidth]);
 
-	// ⌘J toggles the Terminal dock tab
+	// ⌘J toggles the Terminal dock tab; ⌘K opens the command palette.
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
-			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+			const key = e.key.toLowerCase();
+			if ((e.metaKey || e.ctrlKey) && key === "j") {
 				e.preventDefault();
 				setDockTab((prev) => (prev === "terminal" ? null : "terminal"));
+			}
+			if ((e.metaKey || e.ctrlKey) && key === "k") {
+				e.preventDefault();
+				setPaletteOpen((v) => !v);
 			}
 		};
 		window.addEventListener("keydown", onKey);
@@ -591,6 +603,18 @@ export default function ChatPage(): React.JSX.Element {
 									};
 								});
 							}}
+						/>
+					)}
+
+					{paletteOpen && active !== undefined && (
+						<CommandPalette
+							sessionId={active.id}
+							onClose={() => setPaletteOpen(false)}
+							onOpenSheet={(kind) => onOpenSheet?.(kind)}
+							onSetDockTab={(tab) => setDockTab(tab)}
+							onInsertComposer={(text) => setInsertedText(text)}
+							onOpenCompact={() => setCompactOpen(true)}
+							onNewSession={(backend) => void newSession(backend)}
 						/>
 					)}
 

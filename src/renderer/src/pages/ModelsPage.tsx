@@ -16,9 +16,13 @@ const SUBSCRIPTION_COPY: Record<string, string> = {
 };
 
 export function ModelsPage({
+	sessionOpen = false,
 	onUseWithSession,
+	onUseInSession,
 }: {
+	sessionOpen?: boolean;
 	onUseWithSession?(provider: string, modelId: string): void;
+	onUseInSession?(provider: string, modelId: string): void;
 }): React.JSX.Element {
 	const [providers, setProviders] = useState<ProviderAuthInfo[]>([]);
 	const [models, setModels] = useState<ModelCatalogEntry[]>([]);
@@ -357,16 +361,27 @@ export function ModelsPage({
 													<td className="px-2 py-1.5 font-mono text-[10px] text-neutral-400">
 														{m.outputCostPerMtok !== null ? `$${m.outputCostPerMtok.toFixed(2)}` : "—"}
 													</td>
-													<td className="px-2 py-1.5">
+												<td className="px-2 py-1.5">
+													{sessionOpen && onUseInSession !== undefined && (
 														<button
 															type="button"
-															onClick={() => onUseWithSession?.(m.provider, m.id)}
-															className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700"
-															title="Set as default model for new sessions"
+															data-testid={`use-in-session-${m.id}`}
+															onClick={() => onUseInSession(m.provider, m.id)}
+															className="mr-1 rounded bg-blue-700 px-2 py-0.5 text-[10px] text-white hover:bg-blue-600"
+															title="Apply to the open session now"
 														>
-															Set default
+															Use in session
 														</button>
-													</td>
+													)}
+													<button
+														type="button"
+														onClick={() => onUseWithSession?.(m.provider, m.id)}
+														className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700"
+														title="Set as default model for new sessions"
+													>
+														Set default
+													</button>
+												</td>
 												</tr>
 											))}
 									</tbody>
