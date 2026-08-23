@@ -9,12 +9,14 @@ import {
 	Check,
 	ChevronDown,
 	ChevronRight,
+	ListTodo,
 	LoaderCircle,
 	Minus,
 	Plus,
 	Wrench,
 	X,
 } from "lucide-react";
+import { PERMISSION_BLOCK_REASONS } from "../../../../shared/pi";
 import { Markdown } from "./Markdown";
 import type {
 	AssistantBlock,
@@ -74,6 +76,12 @@ const ToolBlockView = memo(function ToolBlockView({
 	const isDiffOutput = block.status !== "running" && isDiff(block.output);
 	const StatusIcon =
 		block.status === "running" ? LoaderCircle : block.status === "error" ? X : Check;
+	// A permission-blocked call (plan mode / user denial) reads as "planned,
+	// not executed" — distinct from a real failure.
+	const blockReason = Object.values(PERMISSION_BLOCK_REASONS).find((reason) =>
+		block.status === "error" && block.output.startsWith(reason)
+	);
+	const blockedByPermission = blockReason !== undefined;
 	const statusCls =
 		block.status === "running"
 			? "text-blue-400"
@@ -93,12 +101,16 @@ const ToolBlockView = memo(function ToolBlockView({
 					onClick={() => toggleExpanded(key, fallback)}
 					className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-xs"
 				>
-					<span className={`flex shrink-0 items-center ${statusCls}`}>
-						<StatusIcon
-							size={12}
-							strokeWidth={2.25}
-							className={block.status === "running" ? "animate-spin" : undefined}
-						/>
+					<span className={`flex shrink-0 items-center ${blockedByPermission ? "text-blue-400" : statusCls}`}>
+						{blockedByPermission ? (
+							<ListTodo size={12} strokeWidth={2.25} />
+						) : (
+							<StatusIcon
+								size={12}
+								strokeWidth={2.25}
+								className={block.status === "running" ? "animate-spin" : undefined}
+							/>
+						)}
 					</span>
 					<span className="font-medium text-neutral-300">{block.toolName}</span>
 					{block.argsJson !== undefined && (
@@ -125,7 +137,13 @@ const ToolBlockView = memo(function ToolBlockView({
 				)}
 			</div>
 			{expanded && block.output.length > 0 && (
-				<div className="rounded-lg border-t border-neutral-800 p-3">
+				<div
+					className={
+						blockedByPermission
+							? "rounded-lg border-l-2 border-blue-800 p-3 text-[11px] italic text-neutral-400"
+							: "rounded-lg border-t border-neutral-800 p-3"
+					}
+				>
 					{isDiffOutput ? (
 						<DiffView diff={block.output} />
 					) : (

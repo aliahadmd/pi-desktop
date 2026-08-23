@@ -3,7 +3,7 @@
  * "/" palette, steer/follow-up segmented toggle, attach row, git-strip slot.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, FileText, GitBranch, X } from "lucide-react";
+import { ArrowDown, ArrowUp, FileText, GitBranch, ListTodo, X } from "lucide-react";
 import type { PiImageInput, PiModelInfo, PiThinkingLevel, PermissionMode } from "../../../../shared/pi";
 import { ModePicker } from "./ModePicker";
 import { ModelPicker } from "./ModelPicker";
@@ -254,7 +254,31 @@ export function Composer({
 				</div>
 			)}
 
-			<div className="rounded-xl border border-neutral-700/80 bg-neutral-900/80 transition-colors focus-within:border-blue-600/70">
+			{permissionMode === "plan" && (
+				<button
+					type="button"
+					data-testid="plan-mode-banner"
+					onClick={() => onPickPermissionMode?.("askBeforeEdits")}
+					title="Click to exit Plan mode"
+					className="mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-blue-900/60 bg-blue-950/40 px-3 py-1.5 text-left text-[11px] text-blue-300 hover:border-blue-700"
+				>
+					<ListTodo size={12} strokeWidth={2} className="shrink-0" />
+					<span className="flex-1">
+						Plan mode — the agent can research but cannot modify files or run commands.
+					</span>
+					<span className="shrink-0 text-[10px] text-blue-400/70">exit</span>
+				</button>
+			)}
+
+			<div
+				className={`rounded-xl border transition-colors focus-within:border-blue-600/70 ${
+					permissionMode === "plan"
+						? "border-blue-800/60 bg-neutral-900/80"
+						: permissionMode === "bypass"
+							? "border-amber-900/60 bg-neutral-900/80 focus-within:border-amber-600/70"
+							: "border-neutral-700/80 bg-neutral-900/80 focus-within:border-blue-600/70"
+				}`}
+			>
 				<textarea
 					ref={inputRef}
 					value={text}

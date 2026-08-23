@@ -655,9 +655,14 @@ export const workspaceRootsRequestSchema = Type.Object({
 // Permission modes (phase 5)
 // ---------------------------------------------------------------------------
 
-export const PermissionModeSchema = Type.Union(
-	permissionModes.map((m) => Type.Literal(m)),
-);
+// Explicit literals (not .map) so typebox infers a proper union -> Static union.
+export const PermissionModeSchema = Type.Union([
+	Type.Literal("plan"),
+	Type.Literal("alwaysAsk"),
+	Type.Literal("askBeforeEdits"),
+	Type.Literal("acceptEdits"),
+	Type.Literal("bypass"),
+]);
 
 export const permissionSetModeRequestSchema = Type.Object({
 	type: Type.Literal("permission.set_mode"),
