@@ -72,11 +72,22 @@ def get_conn() -> sqlite3.Connection:
     return conn
 
 
+class SnippetSegment(BaseModel):
+    """One run of snippet text. `match` marks it as a search hit.
+
+    Segments are plain data: the client renders each `text` into a text node,
+    so session content can never re-enter the DOM as markup.
+    """
+
+    text: str
+    match: bool
+
+
 class SearchHit(BaseModel):
     session_id: str | None
     entry_id: str
     role: str
-    snippet: str
+    segments: list[SnippetSegment]
     cwd: str | None
     session_name: str | None
 

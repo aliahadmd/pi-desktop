@@ -149,6 +149,43 @@ def sanitize_query(query: str) -> str:
     return " ".join(f'"{t.replace(chr(34), "")}"' for t in terms)
 
 
+# Control characters used to delimit FTS match spans. These are never present
+# in indexed session text, so they cannot collide with content the way `<mark>`
+# does -- which is the whole point: `snippet()` does not escape the text it
+# wraps, so emitting HTML here put raw session content straight into the DOM.
+_MATCH_OPEN = "\x1e"
+_MATCH_CLOSE = "\x1f"
+
+
+def split_snippet(raw: str) -> list[dict[str, object]]:
+    """Split delimiter-marked snippet text into ``{text, match}`` segments.
+
+    Text is returned byte-for-byte as indexed, minus only the delimiters we
+    inserted ourselves. Nothing is escaped or stripped: inertness comes from
+    shipping data instead of markup, so the renderer can put every segment in a
+    text node.
+
+    Total by construction -- any input string yields a (possibly empty) list.
+    """
+    segments: list[dict[str, object]] = []
+    for chunk_index, chunk in enumerate(raw.split(_MATCH_OPEN)):
+        if chunk == "":
+            continue
+        # The first chunk precedes any open delimiter, so it is never a match.
+        # Later chunks start with matched text up to the close delimiter.
+        if chunk_index == 0:
+            segments.append({"text": chunk, "match": False})
+            continue
+        matched, sep, trailing = chunk.partition(_MATCH_CLOSE)
+        if matched != "":
+            # A missing close delimiter means the snippet window cut the pair;
+            # treat the remainder as ordinary text rather than guessing.
+            segments.append({"text": matched, "match": sep != ""})
+        if trailing != "":
+            segments.append({"text": trailing, "match": False})
+    return segments
+
+
 def search(
     conn: sqlite3.Connection,
     query: str,
@@ -163,24 +200,34 @@ def search(
         SELECT messages_fts.session_id AS session_id,
                messages_fts.entry_id AS entry_id,
                messages_fts.role AS role,
-               snippet(messages_fts, 4, '<mark>', '</mark>', '…', 24) AS snippet,
+               snippet(messages_fts, 4, :open, :close, '…', 24) AS snippet_raw,
                s.cwd AS cwd, s.name AS session_name
         FROM messages_fts
         LEFT JOIN sessions s ON s.id = messages_fts.session_id
-        WHERE messages_fts MATCH ?
+        WHERE messages_fts MATCH :query
     """
-    params: list[Any] = [query]
+    params: dict[str, Any] = {
+        "query": query,
+        "open": _MATCH_OPEN,
+        "close": _MATCH_CLOSE,
+    }
     if project:
-        sql += " AND s.cwd = ?"
-        params.append(project)
-    sql += " ORDER BY rank LIMIT ?"
-    params.append(limit)
+        sql += " AND s.cwd = :project"
+        params["project"] = project
+    sql += " ORDER BY rank LIMIT :limit"
+    params["limit"] = limit
     try:
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+        rows = conn.execute(sql, params).fetchall()
     except sqlite3.OperationalError as e:
         # Malformed FTS query syntax etc.
         log.warning("search failed for %r: %s", query, e)
         return []
+    hits: list[dict[str, Any]] = []
+    for row in rows:
+        hit = dict(row)
+        hit["segments"] = split_snippet(hit.pop("snippet_raw") or "")
+        hits.append(hit)
+    return hits
 
 
 def indexed_count(conn: sqlite3.Connection) -> int:

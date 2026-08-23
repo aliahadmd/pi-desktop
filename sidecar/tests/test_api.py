@@ -43,7 +43,9 @@ def test_health_requires_no_token_but_search_does(db: sqlite3.Connection, sessio
         assert good.status_code == 200
         results = good.json()
         assert len(results) >= 1
-        assert "<mark>" in results[0]["snippet"]
+        # Highlights cross the wire as structured segments, not HTML.
+        assert "snippet" not in results[0]
+        assert any(seg["match"] for seg in results[0]["segments"])
     finally:
         client.__exit__(False, False, False)
 
