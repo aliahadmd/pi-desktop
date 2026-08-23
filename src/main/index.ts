@@ -126,6 +126,7 @@ app.whenReady()
 		}
 
 		const bridge = new FileBridge();
+		if (storeService !== undefined) storeService.fsBridge = bridge;
 		const shellMod = await import("electron").then((m) => m.shell);
 		piService.setDesktopTools(
 			createDesktopTools({

@@ -101,6 +101,31 @@ describe("sessions repo", () => {
 	});
 });
 
+describe("projects repo: pinning and counts (phase 6)", () => {
+	it("pins and unpins a project", () => {
+		const pid = projects.ensure("/home/me/webapp");
+		expect(projects.isPinned(pid)).toBe(false);
+
+		projects.setPinned(pid, true);
+		expect(projects.isPinned(pid)).toBe(true);
+		expect(projects.list().find((p) => p.id === pid)?.pinned_at).not.toBeNull();
+
+		projects.setPinned(pid, false);
+		expect(projects.isPinned(pid)).toBe(false);
+	});
+
+	it("listWithCounts reports live session counts per project", () => {
+		const pid = projects.ensure("/home/me/api");
+		sessions.upsert({ id: "sa", file_path: "/a.jsonl", cwd: "/home/me/api" });
+		sessions.upsert({ id: "sb", file_path: "/b.jsonl", cwd: "/home/me/api" });
+		sessions.upsert({ id: "sc", file_path: "/c.jsonl", cwd: "/elsewhere" });
+		projects.attachProjectToSessions("/home/me/api", pid);
+
+		const row = projects.listWithCounts().find((p) => p.id === pid);
+		expect(row?.session_count).toBe(2);
+	});
+});
+
 describe("usage repo", () => {
 	it("inserts events and rolls up into session totals", () => {
 		sessions.upsert({ id: "s1", file_path: "/a.jsonl" });

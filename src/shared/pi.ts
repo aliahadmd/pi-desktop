@@ -680,6 +680,25 @@ export const permissionGetModeRequestSchema = Type.Object({
 	sessionId: Type.String(),
 });
 
+// ---------------------------------------------------------------------------
+// Projects (phase 6): pinning, create/open, listing with counts
+// ---------------------------------------------------------------------------
+
+export const projectPinRequestSchema = Type.Object({
+	type: Type.Literal("project.pin"),
+	projectId: Type.String(),
+	pinned: Type.Boolean(),
+});
+
+export const projectCreateRequestSchema = Type.Object({
+	type: Type.Literal("project.create"),
+	path: Type.String(),
+});
+
+export const projectListRequestSchema = Type.Object({
+	type: Type.Literal("project.list"),
+});
+
 
 export const sidecarSearchRequestSchema = Type.Object({
 	type: Type.Literal("sidecar.search"),
@@ -823,6 +842,9 @@ export const piRequestSchemas = {
 	"permission.set_mode": permissionSetModeRequestSchema,
 	"permission.set_default": permissionSetDefaultRequestSchema,
 	"permission.get_mode": permissionGetModeRequestSchema,
+	"project.pin": projectPinRequestSchema,
+	"project.create": projectCreateRequestSchema,
+	"project.list": projectListRequestSchema,
 	"session.delete_file": sessionDeleteFileRequestSchema,
 	"db.sessions.list": dbListRequestSchema,
 	"db.sessions.search": dbSearchRequestSchema,
@@ -907,6 +929,18 @@ export interface PiResponseMap {
 	"permission.set_mode": null;
 	"permission.set_default": null;
 	"permission.get_mode": { mode: PermissionMode };
+	"project.pin": null;
+	"project.create": { projectId: string; created: boolean };
+	"project.list": {
+		projects: Array<{
+			id: string;
+			path: string;
+			name: string | null;
+			pinned: boolean;
+			sessionCount: number;
+			lastOpenedAt: number | null;
+		}>;
+	};
 	"session.delete_file": null;
 	"db.sessions.list": { sessions: IndexedSession[] };
 	"db.sessions.search": { sessions: IndexedSession[] };

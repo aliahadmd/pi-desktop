@@ -253,6 +253,11 @@ export interface ProjectRow {
 	name: string | null;
 	added_at: number;
 	last_opened_at: number | null;
+	pinned_at: number | null;
+}
+
+export interface ProjectRowWithMeta extends ProjectRow {
+	session_count: number;
 }
 
 export class ProjectsRepo {
@@ -290,6 +295,31 @@ export class ProjectsRepo {
 		this.db
 			.prepare("UPDATE sessions SET project_id = ? WHERE cwd = ? AND project_id IS NULL")
 			.run(projectId, cwd);
+	}
+
+	setPinned(projectId: string, pinned: boolean): void {
+		this.db
+			.prepare("UPDATE projects SET pinned_at = ? WHERE id = ?")
+			.run(pinned ? Date.now() : null, projectId);
+	}
+
+	isPinned(projectId: string): boolean {
+		const row = this.db
+			.prepare("SELECT pinned_at FROM projects WHERE id = ?")
+			.get(projectId) as { pinned_at: number | null } | undefined;
+		return row?.pinned_at != null;
+	}
+
+	/** All projects with live session counts; caller applies sort order. */
+	listWithCounts(): ProjectRowWithMeta[] {
+		return this.db
+			.prepare(
+				`SELECT p.*,
+					COALESCE((SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id), 0)
+					AS session_count
+				 FROM projects p`,
+			)
+			.all() as ProjectRowWithMeta[];
 	}
 }
 

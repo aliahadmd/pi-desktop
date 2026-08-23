@@ -34,6 +34,8 @@ export class StoreService {
 	private settings: SettingsRepo | null = null;
 	private readonly appToPiSession = new Map<string, string>();
 	private indexTimer: NodeJS.Timeout | null = null;
+	/** Injected by index.ts so project.create can register fs roots. */
+	fsBridge?: { getRoots(): string[]; setRoots(roots: string[]): void };
 
 	constructor(
 		private readonly appSupportDir: string,
@@ -106,6 +108,36 @@ export class StoreService {
 		router.handle("db.projects.list", () => {
 			const rows = this.projects?.list() ?? [];
 			return { projects: rows.map((p) => ({ id: p.id, path: p.path, name: p.name })) };
+		});
+		router.handle("project.list", () => {
+			const rows = this.projects?.listWithCounts() ?? [];
+			return {
+				projects: rows.map((p) => ({
+					id: p.id,
+					path: p.path,
+					name: p.name,
+					pinned: p.pinned_at != null,
+					sessionCount: p.session_count,
+					lastOpenedAt: p.last_opened_at,
+				})),
+			};
+		});
+		router.handle("project.pin", (req) => {
+			this.projects?.setPinned(req.projectId, req.pinned);
+			return null;
+		});
+		router.handle("project.create", (req) => {
+			if (this.projects === null) throw new Error("store not ready");
+			const existing = this.projects
+				.list()
+				.find((p) => p.path === req.path);
+			const projectId = this.projects.ensure(req.path);
+			this.projects.touch(projectId);
+			// Make the folder browsable immediately, mirroring what opening a
+			// session there does.
+			const roots = this.fsBridge?.getRoots() ?? [];
+			if (!roots.includes(req.path)) this.fsBridge?.setRoots([...roots, req.path]);
+			return { projectId, created: existing === undefined };
 		});
 		router.handle("db.indexer.refresh", async () => {
 			return { indexed: await this.reindex() };

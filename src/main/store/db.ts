@@ -64,7 +64,12 @@ const MIGRATIONS: string[] = [
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL
 	);
-	`,
+`,
+
+	// 002_projects_pinned (phase 6): pinning support for the sidebar.
+	`
+	ALTER TABLE projects ADD COLUMN pinned_at INTEGER;
+`,
 ];
 
 export function openDatabase(dbPath: string): Database.Database {
