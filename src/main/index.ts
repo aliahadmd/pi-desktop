@@ -64,10 +64,21 @@ let sidecar: SidecarManager | undefined;
 let authService: AuthService | undefined;
 let ptyService: PtyService | undefined;
 let tray: Tray | undefined;
+/**
+ * Set once services exist, then used by activate/second-instance to spawn
+ * replacement windows through the SAME path as boot — so every window gets
+ * registered with the renderer event bus. See plans/008.
+ */
+let spawnMainWindowRef: (() => BrowserWindow) | undefined;
 
 app.on("second-instance", () => {
 	const [first] = BrowserWindow.getAllWindows();
-	first?.focus();
+	if (first !== undefined) {
+		first.focus();
+	} else if (app.isReady() && spawnMainWindowRef !== undefined) {
+		// No window to focus (user closed it) — recreate one via the shared path.
+		spawnMainWindowRef();
+	}
 });
 
 app.whenReady()
@@ -272,21 +283,34 @@ app.whenReady()
 			router.dispatch(rawRequest)
 		);
 
-		const savedBounds = storeService.getWindowState<Electron.Rectangle | undefined>(undefined);
-		const clampedBounds =
-			savedBounds !== undefined ? clampBoundsToScreen(savedBounds) : undefined;
-		const window = createMainWindow({
-			preloadPath: path.join(__dirname, "../preload/index.js"),
-			rendererUrl: process.env.ELECTRON_RENDERER_URL,
-			...(clampedBounds !== undefined ? { bounds: clampedBounds } : {}),
-			onClosed: () => {
-				bus.setWindow(null);
-			},
-		});
-		bus.setWindow(window);
-		window.on("close", () => {
-			storeService?.setWindowState(window.getBounds());
-		});
+		/**
+		 * Single window-spawning path shared by boot, activate, and
+		 * second-instance. Every window created through here is registered
+		 * with the renderer event bus; without this, a window reopened from
+		 * the Dock would never receive another pi event (plans/008 H-1).
+		 */
+		const spawnMainWindow = (): BrowserWindow => {
+			const store = storeService;
+			if (store === undefined) throw new Error("store not ready");
+			const savedBounds = store.getWindowState<Electron.Rectangle | undefined>(undefined);
+			const clampedBounds =
+				savedBounds !== undefined ? clampBoundsToScreen(savedBounds) : undefined;
+			const win = createMainWindow({
+				preloadPath: path.join(__dirname, "../preload/index.js"),
+				rendererUrl: process.env.ELECTRON_RENDERER_URL,
+				...(clampedBounds !== undefined ? { bounds: clampedBounds } : {}),
+				onClosed: () => {
+					bus.setWindow(null);
+				},
+			});
+			bus.setWindow(win);
+			win.on("close", () => {
+				store.setWindowState(win.getBounds());
+			});
+			return win;
+		};
+		spawnMainWindowRef = spawnMainWindow;
+		spawnMainWindow();
 
 		createTray();
 		setupAutoUpdater(logger);
@@ -327,12 +351,8 @@ app.on("before-quit", (event) => {
 });
 
 app.on("activate", () => {
-	if (BrowserWindow.getAllWindows().length === 0 && app.isReady()) {
-		createMainWindow({
-			preloadPath: path.join(__dirname, "../preload/index.js"),
-			rendererUrl: process.env.ELECTRON_RENDERER_URL,
-			onClosed: () => {},
-		});
+	if (BrowserWindow.getAllWindows().length === 0 && app.isReady() && spawnMainWindowRef !== undefined) {
+		spawnMainWindowRef();
 	}
 });
 
