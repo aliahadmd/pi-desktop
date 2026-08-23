@@ -700,6 +700,10 @@ export type PiCommandInfo = {
 	name: string;
 	description?: string;
 	source: string;
+	/** Absolute path of the backing resource (.md), when the command has one. */
+	path?: string;
+	/** Upstream argument-hint from prompt-template frontmatter. */
+	argumentHint?: string;
 };
 
 // Static schema instances for the router (payload validation)

@@ -14,6 +14,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type {
+	PiCommandInfo,
 	PiEvent,
 	PiModelInfo,
 	PiSessionState,
@@ -244,11 +245,11 @@ export class RpcPiBackend implements IPiBackend {
 		return data.messages.map((m) => safeJson(m));
 	}
 
-	async getCommands(): Promise<Array<{ name: string; description?: string; source: string }>> {
+	async getCommands(): Promise<PiCommandInfo[]> {
 		const data = (await this.request({ type: "get_commands" })) as {
-			commands: Array<{ name: string; description?: string; source: string }>;
+			commands: RpcSlashCommand[];
 		};
-		return data.commands;
+		return data.commands.map(mapRpcCommand);
 	}
 
 	async getStats(): Promise<JsonValue> {
@@ -553,6 +554,36 @@ export class RpcPiBackend implements IPiBackend {
 	private getStderrTail(): string {
 		return this.stderrTail.join("").slice(-500);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Command mapping (RpcSlashCommand → PiCommandInfo)
+// ---------------------------------------------------------------------------
+
+/** Upstream's `RpcSlashCommand` wire shape (rpc-types.ts). */
+export interface RpcSlashCommand {
+	name: string;
+	description?: string;
+	source: string;
+	sourceInfo?: { path?: string };
+}
+
+/**
+ * Map one RPC command to the desktop contract.
+ *
+ * `path` is only carried for markdown resources: `resources.read_text` accepts
+ * `.md` alone, so passing a `.ts` extension handler's path would promise a
+ * detail view that the main process then refuses. Commands without a usable
+ * path degrade to a plain `/name` insert, which is the intended behaviour.
+ */
+export function mapRpcCommand(command: RpcSlashCommand): PiCommandInfo {
+	const sourcePath = command.sourceInfo?.path;
+	return {
+		name: command.name,
+		...(command.description !== undefined ? { description: command.description } : {}),
+		source: command.source,
+		...(sourcePath !== undefined && sourcePath.endsWith(".md") ? { path: sourcePath } : {}),
+	};
 }
 
 // ---------------------------------------------------------------------------

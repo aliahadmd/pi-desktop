@@ -8,6 +8,7 @@
  * A third (RemotePiBackend over pi-client CBOR) is stubbed for later chapters.
  */
 import type {
+	PiCommandInfo,
 	PiEvent,
 	PiImageInput,
 	PiModelInfo,
@@ -79,7 +80,7 @@ export interface IPiBackend {
 	compact(customInstructions?: string): Promise<JsonValue>;
 	getState(): Promise<PiSessionState>;
 	getMessages(): Promise<JsonValue[]>;
-	getCommands(): Promise<Array<{ name: string; description?: string; source: string }>>;
+	getCommands(): Promise<PiCommandInfo[]>;
 	getStats(): Promise<JsonValue>;
 	exportHtml(outputPath?: string): Promise<string>;
 
