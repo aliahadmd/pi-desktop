@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
-import type { PiImageInput, PiModelInfo } from "../../../shared/pi";
+import type { PiImageInput, PiModelInfo, PiThinkingLevel } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
 import { nextActiveTerminalTab } from "../lib/terminal-tabs";
 import { Transcript } from "../components/chat/Transcript";
@@ -62,6 +62,8 @@ export default function ChatPage({
 	// Model catalog for the composer's searchable picker. Loaded once per
 	// active session (the catalog is session-scoped upstream).
 	const [catalog, setCatalog] = useState<PiModelInfo[]>([]);
+	// Thinking levels supported by the active model; re-fetched when it changes.
+	const [thinkingSupported, setThinkingSupported] = useState<PiThinkingLevel[]>([]);
 	const play = (event: SoundEvent): void => {
 		playSoundIfEnabled(event);
 	};
@@ -129,6 +131,24 @@ export default function ChatPage({
 		active?.blocks.filter(
 			(b) => b.kind === "tool" && ["edit", "write"].includes(b.toolName)
 		).length ?? 0;
+
+	// Thinking levels supported by the active model; re-fetched when it changes.
+	useEffect(() => {
+		if (activeId === null || active?.model === undefined) {
+			setThinkingSupported([]);
+			return;
+		}
+		let cancelled = false;
+		void window.piDesktop
+			.invoke({ type: "session.thinking_levels", sessionId: activeId })
+			.then((r) => {
+				if (!cancelled && r.ok) setThinkingSupported(r.data.levels);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [activeId, active?.model?.id]);
 
 	async function newSession(backend: "sdk" | "rpc"): Promise<void> {
 		setCreating(true);
@@ -526,6 +546,16 @@ export default function ChatPage({
 									else refreshState(active.id);
 								});
 						}}
+						thinkingLevel={active.thinkingLevel}
+						supportedThinkingLevels={thinkingSupported}
+						onPickThinkingLevel={(level) => {
+							if (activeId === null) return;
+							void window.piDesktop.invoke({
+								type: "session.set_thinking",
+								sessionId: activeId,
+								level,
+							});
+						}}
 						onSend={send}
 						onBash={runBash}
 						onAbort={() => {
@@ -539,24 +569,7 @@ export default function ChatPage({
 					/>
 					</div>
 
-					<StatusBar
-						session={active}
-						onCycleModel={() => {
-							void window.piDesktop
-								.invoke({ type: "session.cycle_model", sessionId: active.id })
-								.then((r) => {
-									if (!r.ok) pushErrorNotice(active.id, r.error.message);
-									else refreshState(active.id);
-								});
-						}}
-						onSetThinkingLevel={(level) => {
-							void window.piDesktop.invoke({
-								type: "session.set_thinking",
-								sessionId: active.id,
-								level,
-							});
-						}}
-					/>
+					<StatusBar session={active} />
 
 					{compactOpen && (
 						<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">

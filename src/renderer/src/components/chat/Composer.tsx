@@ -3,8 +3,9 @@
  * "/" palette, steer/follow-up segmented toggle, attach row, git-strip slot.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PiImageInput, PiModelInfo } from "../../../../shared/pi";
+import type { PiImageInput, PiModelInfo, PiThinkingLevel } from "../../../../shared/pi";
 import { ModelPicker } from "./ModelPicker";
+import { ThinkingPicker } from "./ThinkingPicker";
 
 interface Attachment {
 	id: string;
@@ -33,6 +34,9 @@ export function Composer({
 	models,
 	currentModel,
 	onPickModel,
+	thinkingLevel,
+	supportedThinkingLevels,
+	onPickThinkingLevel,
 }: {
 	streaming: boolean;
 	queueCount: number;
@@ -49,6 +53,10 @@ export function Composer({
 	models?: PiModelInfo[] | undefined;
 	currentModel?: { provider: string; id: string; name: string } | undefined;
 	onPickModel?(model: PiModelInfo): void;
+	/** Reasoning-effort selector; omit to hide the control entirely. */
+	thinkingLevel?: PiThinkingLevel | undefined;
+	supportedThinkingLevels?: PiThinkingLevel[] | undefined;
+	onPickThinkingLevel?(level: PiThinkingLevel): void;
 }): React.JSX.Element {
 	const [text, setText] = useState("");
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -332,7 +340,13 @@ export function Composer({
 									onPick={(m) => onPickModel?.(m)}
 								/>
 							)}
-							<span className="hidden truncate text-[10px] text-neutral-600 sm:block">Type / for commands · ! bash</span>
+							{onPickThinkingLevel !== undefined && (
+								<ThinkingPicker
+									level={thinkingLevel}
+									supportedLevels={supportedThinkingLevels ?? []}
+									onPick={(l) => onPickThinkingLevel(l)}
+								/>
+							)}
 							<button
 								type="button"
 								data-testid="send-button"

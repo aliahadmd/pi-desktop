@@ -32,6 +32,9 @@ const ALLOWLIST: Record<string, string> = {
 	// these are dead surface kept until a deliberate deletion (audit C-2 note).
 	"session.steer": "composer routes steering through session.prompt(streamingBehavior)",
 	"session.follow_up": "composer routes follow-ups through session.prompt(streamingBehavior)",
+	// Superseded by real selection: the composer's ModelPicker calls
+	// session.set_model with an explicit choice, so blind cycling has no UI.
+	"session.cycle_model": "superseded by session.set_model via the composer model picker",
 	// Append-order entry cursor; the Tree panel uses session.tree instead.
 	"session.entries": "internal append-order cursor; tree UI uses session.tree",
 	// Superseded by the SQLite-backed db.sessions.* index.
