@@ -1,7 +1,7 @@
 # Pi Desktop
 
 macOS Electron client for the [Pi coding agent](../pi/README.md). Built chapter-by-chapter
-according to [../piplan/main.md](../piplan/main.md).
+according to [../piplan/Phase-1/main.md](../piplan/Phase-1/main.md).
 
 ## Status
 
