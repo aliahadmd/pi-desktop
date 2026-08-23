@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Ansi from "ansi-to-react";
 import { Markdown } from "../chat/Markdown";
+import { parseArgumentHintFromHint } from "../../lib/command-hints";
 
 // ---------------------------------------------------------------------------
 // File explorer (read-only, scoped to session cwd)
@@ -375,6 +376,7 @@ interface CommandInfo {
 
 interface DetailedCommand extends CommandInfo {
 	path?: string;
+	argumentHint?: string;
 }
 
 function parseArgumentHint(text: string): string[] | null {
@@ -416,7 +418,20 @@ export function CommandsBrowser({
 			.catch(() => {});
 	}, [sessionId]);
 
+	function openArgForm(command: DetailedCommand, hints: string[] | null, content: string): void {
+		setDetail({ command, content });
+		setArgHints(hints);
+		setArgValues([]);
+	}
+
 	function inspect(command: DetailedCommand): void {
+		// Upstream hands us the hint directly for prompt templates — no need to
+		// fetch and re-parse the frontmatter we already have.
+		if (command.argumentHint !== undefined) {
+			const hints = parseArgumentHintFromHint(command.argumentHint);
+			openArgForm(command, hints.length > 0 ? hints : null, command.description ?? "");
+			return;
+		}
 		if (command.path === undefined) {
 			onInsert(`/${command.name} `);
 			return;
@@ -424,11 +439,14 @@ export function CommandsBrowser({
 		void window.piDesktop
 			.invoke({ type: "resources.read_text", path: command.path })
 			.then((r) => {
-				if (!r.ok) return;
+				// A denied or unreadable source used to leave the user staring at
+				// nothing; fall back to the plain insert instead.
+				if (!r.ok) {
+					onInsert(`/${command.name} `);
+					return;
+				}
 				const { body, head } = splitFrontmatter(r.data.content);
-				setDetail({ command, content: body });
-				setArgHints(parseArgumentHint(head));
-				setArgValues([]);
+				openArgForm(command, parseArgumentHint(head), body);
 			})
 			.catch(() => onInsert(`/${command.name} `));
 	}
