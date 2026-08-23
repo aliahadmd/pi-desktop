@@ -231,14 +231,6 @@ describe("regression: only one compact dialog is rendered", () => {
 });
 
 describe("regression: escaped absolute positioning (plan 003)", () => {
-	it("rail drag strip has a positioned ancestor", () => {
-		const source = readFileSync(
-			"src/renderer/src/components/shell/Sidebar.tsx",
-			"utf8",
-		);
-		expect(source).toContain("relative flex h-full cursor-pointer flex-col items-center");
-	});
-
 	it("expanded sidebar is positioned for its context menu", () => {
 		const source = readFileSync(
 			"src/renderer/src/components/shell/Sidebar.tsx",

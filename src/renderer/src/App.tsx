@@ -12,6 +12,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TrustPanel } from "./pages/TrustPanel";
 import { SessionsPage } from "./pages/SessionsPage";
 import { Onboarding } from "./pages/Onboarding";
+import { TopBar } from "./components/shell/TopBar";
 import { PackageMarketplace } from "./pages/PackageMarketplace";
 import { Sheet } from "./components/shell/Sheet";
 import { Sidebar } from "./components/shell/Sidebar";
@@ -98,32 +99,37 @@ export default function App(): React.JSX.Element {
 	}, []);
 
 	return (
-		<div className="flex h-full overflow-hidden">
-			<AnimatePresence initial={false} mode="wait">
-				<motion.div
-					key={sidebarCollapsed ? "rail" : "full"}
-					initial={false}
-					animate={{
-						width: sidebarCollapsed ? "var(--sidebar-rail-w)" : "var(--sidebar-w)",
-					}}
-					transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-					className="shrink-0 overflow-hidden"
-				>
-					<Sidebar
-						collapsed={sidebarCollapsed}
-						onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-						onOpenSession={(response) => {
-							useSessions.getState().open(response);
-							setSheet(null);
-						}}
-						onOpenSheet={(kind) => setSheet(kind)}
-					/>
-				</motion.div>
+		<div className="flex h-full flex-col overflow-hidden">
+			{/* Top app bar: owns the sidebar toggle + window drag region.
+			    Visible always — the restore control survives a hidden sidebar. */}
+			<TopBar
+				sidebarHidden={sidebarCollapsed}
+				onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+			/>
+
+			<div className="flex min-h-0 flex-1 overflow-hidden">
+			<AnimatePresence initial={false}>
+				{!sidebarCollapsed && (
+					<motion.div
+						key="full"
+						initial={false}
+						animate={{ width: "var(--sidebar-w)" }}
+						exit={{ width: 0, opacity: 0 }}
+						transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+						className="shrink-0 overflow-hidden"
+					>
+						<Sidebar
+							onOpenSession={(response) => {
+								useSessions.getState().open(response);
+								setSheet(null);
+							}}
+							onOpenSheet={(kind) => setSheet(kind)}
+						/>
+					</motion.div>
+				)}
 			</AnimatePresence>
 
 			<main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-				<div className="titlebar-drag flex h-3 shrink-0 items-center" />
-
 				<AnimatePresence>
 					{showOnboarding && onboardingChecked && (
 						<Onboarding
@@ -266,6 +272,7 @@ export default function App(): React.JSX.Element {
 					</div>
 				</div>
 			)}
+			</div>
 		</div>
 	);
 }

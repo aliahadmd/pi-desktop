@@ -9,7 +9,6 @@ import {
 	FolderOpen,
 	FolderPlus,
 	Package,
-	PanelLeftClose,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sortProjects, type ProjectSortMode } from "../../lib/project-sort";
@@ -54,13 +53,9 @@ function relTime(ts: number | null): string {
 }
 
 export function Sidebar({
-	collapsed,
-	onToggleCollapse,
 	onOpenSession,
 	onOpenSheet,
 }: {
-	collapsed: boolean;
-	onToggleCollapse(): void;
 	onOpenSession(response: import("../../../../shared/pi").SessionOpenedResponse): void;
 	onOpenSheet(sheet: "models" | "settings" | "trust" | "browse" | "packages"): void;
 }): React.JSX.Element {
@@ -89,13 +84,12 @@ export function Sidebar({
 
 	useEffect(() => {
 		const debounce = setTimeout(() => void load(), 200);
-		if (collapsed) return () => clearTimeout(debounce);
 		const timer = setInterval(() => void load(), 10_000);
 		return () => {
 			clearTimeout(debounce);
 			clearInterval(timer);
 		};
-	}, [filter, load, collapsed]);
+	}, [filter, load]);
 
 	// Group by cwd
 	const groups = useMemo(() => {
@@ -329,48 +323,9 @@ export function Sidebar({
 		};
 	}, [profileMenuOpen]);
 
-	if (collapsed) {
-		return (
-			// Clicking anywhere on the rail restores the full sidebar; the +
-			// still creates a session directly (stopPropagation).
-			<div
-				className="relative flex h-full cursor-pointer flex-col items-center gap-2 border-r border-neutral-800 bg-neutral-950/60 pt-10"
-				style={{ width: "var(--sidebar-rail-w)" }}
-				onClick={onToggleCollapse}
-				title="Show sidebar (⌘\)"
-				data-testid="sidebar-rail"
-			>
-				<div className="titlebar-drag absolute left-0 top-0 h-10 w-full z-10" />
-				<button
-					type="button"
-					title="New session"
-					onClick={(e) => {
-						e.stopPropagation();
-						void create("sdk");
-					}}
-					className="rounded-lg bg-blue-600 p-1.5 text-white hover:bg-blue-500"
-				>
-					+
-				</button>
-				{sessions.slice(0, 8).map((s) => {
-					const dot = statusDot(s.id);
-					return (
-						<span
-							key={s.id}
-							title={s.name ?? s.firstMessage ?? s.filePath}
-							className={`h-2 w-2 rounded-full ${
-								dot === "dead"
-									? "bg-red-500"
-									: dot === "streaming"
-										? "bg-blue-500 animate-pulse"
-										: "bg-neutral-600"
-							}`}
-						/>
-					);
-				})}
-			</div>
-		);
-	}
+	// The sidebar only ever renders expanded now: when hidden it is removed
+	// from the layout entirely (App.tsx) and the TopBar owns the restore
+	// control, so there is no leftover rail chrome.
 
 	return (
 		<div
@@ -397,16 +352,6 @@ export function Sidebar({
 						className="rounded-lg bg-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
 					>
 						RPC
-					</button>
-					<button
-						type="button"
-						title="Hide sidebar (⌘\)"
-						data-testid="sidebar-collapse"
-						aria-label="Hide sidebar"
-						onClick={onToggleCollapse}
-						className="rounded-lg bg-neutral-800 px-2 py-1.5 text-neutral-300 hover:bg-neutral-700 hover:text-white"
-					>
-						<PanelLeftClose size={14} strokeWidth={2} />
 					</button>
 				</div>
 				<input
