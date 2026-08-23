@@ -22,6 +22,7 @@ import { SdkPiBackend } from "./sdk-backend";
 
 interface SessionEntry {
 	id: string;
+	/** Live project cwd. Mutable: a session switch re-points it (plan 009). */
 	cwd: string;
 	backend: IPiBackend;
 }
@@ -182,6 +183,14 @@ export class PiService {
 		});
 		router.handle("session.switch", async (req) => {
 			const result = await this.backend(req.sessionId).switchSession(req.sessionPath);
+			// The runtime rebuilt itself at the target session's cwd. Refresh the
+			// registry entry so everything scoped to it (fs-bridge roots, explorer
+			// root, new-terminal cwd) follows the switch instead of pinning the
+			// project we happened to boot in.
+			const entry = this.sessions.get(req.sessionId);
+			if (entry !== undefined) {
+				entry.cwd = resolveResumeCwd(req.sessionPath, undefined);
+			}
 			// Re-register scoping (roots, dock cwd) for the switched-to project.
 			await this.notifySessionOpened(req.sessionId);
 			return result;
