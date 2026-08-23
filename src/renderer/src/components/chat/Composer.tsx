@@ -3,7 +3,8 @@
  * "/" palette, steer/follow-up segmented toggle, attach row, git-strip slot.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PiImageInput } from "../../../../shared/pi";
+import type { PiImageInput, PiModelInfo } from "../../../../shared/pi";
+import { ModelPicker } from "./ModelPicker";
 
 interface Attachment {
 	id: string;
@@ -29,6 +30,9 @@ export function Composer({
 	onOpenReview,
 	projectRoot,
 	modelName,
+	models,
+	currentModel,
+	onPickModel,
 }: {
 	streaming: boolean;
 	queueCount: number;
@@ -41,6 +45,10 @@ export function Composer({
 	onOpenReview(): void;
 	projectRoot: string | null;
 	modelName?: string | undefined;
+	/** Full catalog for the searchable picker; omit to render a passive chip. */
+	models?: PiModelInfo[] | undefined;
+	currentModel?: { provider: string; id: string; name: string } | undefined;
+	onPickModel?(model: PiModelInfo): void;
 }): React.JSX.Element {
 	const [text, setText] = useState("");
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -318,11 +326,13 @@ export function Composer({
 					) : (
 						<>
 							{modelName !== undefined && (
-								<span className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-[9px] text-neutral-400">
-									{modelName}
-								</span>
-			)}
-							<span className="text-[10px] text-neutral-600">Type / for commands · ! bash</span>
+								<ModelPicker
+									models={models ?? []}
+									current={currentModel}
+									onPick={(m) => onPickModel?.(m)}
+								/>
+							)}
+							<span className="hidden truncate text-[10px] text-neutral-600 sm:block">Type / for commands · ! bash</span>
 							<button
 								type="button"
 								data-testid="send-button"

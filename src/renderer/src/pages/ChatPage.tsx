@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
-import type { PiImageInput } from "../../../shared/pi";
+import type { PiImageInput, PiModelInfo } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
 import { nextActiveTerminalTab } from "../lib/terminal-tabs";
 import { Transcript } from "../components/chat/Transcript";
@@ -59,9 +59,29 @@ export default function ChatPage({
 	const [compactInstructions, setCompactInstructions] = useState("");
 	const [compacting, setCompacting] = useState(false);
 	const [insertedText, setInsertedText] = useState<string | null>(null);
+	// Model catalog for the composer's searchable picker. Loaded once per
+	// active session (the catalog is session-scoped upstream).
+	const [catalog, setCatalog] = useState<PiModelInfo[]>([]);
 	const play = (event: SoundEvent): void => {
 		playSoundIfEnabled(event);
 	};
+
+	useEffect(() => {
+		if (activeId === null) {
+			setCatalog([]);
+			return;
+		}
+		let cancelled = false;
+		void window.piDesktop
+			.invoke({ type: "session.models", sessionId: activeId })
+			.then((r) => {
+				if (!cancelled && r.ok) setCatalog(r.data.models);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [activeId]);
 
 	const [dockWidth, setDockWidth] = useState(320);
 
@@ -180,7 +200,11 @@ export default function ChatPage({
 	}
 
 	return (
-		<div className="flex h-full flex-col">
+		// min-h-0 + overflow-hidden: this column sits in main's flex stack. The
+		// fixed-height rows below the transcript are shrink-0, so without a
+		// bounded root the column overflows main by exactly their height when
+		// space runs out -- the status bar rendered half-clipped.
+		<div className="flex h-full min-h-0 flex-col overflow-hidden">
 			{/* Open-session chips — only when more than one is open */}
 			{sessionList.length > 1 && (
 				<div className="flex h-8 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
@@ -426,8 +450,10 @@ export default function ChatPage({
 					</div>
 
 
-					{/* Bottom control row */}
-					<div className="flex items-center gap-2 border-t border-neutral-800 px-3 py-1">
+					{/* Bottom control row — shrink-0: under height pressure flex
+					    would otherwise compress this row and push the status bar
+					    below the window edge. */}
+					<div className="flex shrink-0 items-center gap-2 border-t border-neutral-800 px-3 py-1">
 						<button
 							type="button"
 							disabled={active.phase !== "idle"}
@@ -474,15 +500,32 @@ export default function ChatPage({
 						</button>
 					</div>
 
-					<Composer
-						insertText={insertedText}
-						onInsertHandled={() => setInsertedText(null)}
-						streaming={active.phase !== "idle"}
-						queueCount={active.queue.steering.length + active.queue.followUp.length}
-						projectRoot={active.cwd}
-						onOpenPalette={() => setDockTab("commands")}
+					<div className="shrink-0">
+						<Composer
+							insertText={insertedText}
+							onInsertHandled={() => setInsertedText(null)}
+							streaming={active.phase !== "idle"}
+							queueCount={active.queue.steering.length + active.queue.followUp.length}
+							projectRoot={active.cwd}
+							onOpenPalette={() => setDockTab("commands")}
 						onOpenReview={() => setDockTab("review")}
 						modelName={active.model?.name}
+						models={catalog}
+						currentModel={active.model}
+						onPickModel={(m) => {
+							if (activeId === null) return;
+							void window.piDesktop
+								.invoke({
+									type: "session.set_model",
+									sessionId: activeId,
+									provider: m.provider,
+									modelId: m.id,
+								})
+								.then((r) => {
+									if (!r.ok) pushErrorNotice(active.id, r.error.message);
+									else refreshState(active.id);
+								});
+						}}
 						onSend={send}
 						onBash={runBash}
 						onAbort={() => {
@@ -494,6 +537,7 @@ export default function ChatPage({
 							}
 						}}
 					/>
+					</div>
 
 					<StatusBar
 						session={active}
