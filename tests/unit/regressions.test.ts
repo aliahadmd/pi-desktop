@@ -236,7 +236,7 @@ describe("regression: escaped absolute positioning (plan 003)", () => {
 			"src/renderer/src/components/shell/Sidebar.tsx",
 			"utf8",
 		);
-		expect(source).toContain("relative flex h-full flex-col items-center");
+		expect(source).toContain("relative flex h-full cursor-pointer flex-col items-center");
 	});
 
 	it("expanded sidebar is positioned for its context menu", () => {

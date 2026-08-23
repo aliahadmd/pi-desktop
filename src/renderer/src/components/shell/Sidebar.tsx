@@ -10,7 +10,6 @@ import {
 	FolderPlus,
 	Package,
 	PanelLeftClose,
-	PanelLeftOpen,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sortProjects, type ProjectSortMode } from "../../lib/project-sort";
@@ -332,24 +331,23 @@ export function Sidebar({
 
 	if (collapsed) {
 		return (
+			// Clicking anywhere on the rail restores the full sidebar; the +
+			// still creates a session directly (stopPropagation).
 			<div
-				className="relative flex h-full flex-col items-center gap-2 border-r border-neutral-800 bg-neutral-950/60 pt-10"
+				className="relative flex h-full cursor-pointer flex-col items-center gap-2 border-r border-neutral-800 bg-neutral-950/60 pt-10"
 				style={{ width: "var(--sidebar-rail-w)" }}
+				onClick={onToggleCollapse}
+				title="Show sidebar (⌘\)"
+				data-testid="sidebar-rail"
 			>
-				<div className="titlebar-drag absolute left-0 top-0 h-10 w-full" />
-				<button
-					type="button"
-					title="Show sidebar (⌘\)"
-					data-testid="sidebar-expand"
-					onClick={onToggleCollapse}
-					className="rounded p-1.5 text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
-				>
-					<PanelLeftOpen size={14} strokeWidth={2} />
-				</button>
+				<div className="titlebar-drag absolute left-0 top-0 h-10 w-full z-10" />
 				<button
 					type="button"
 					title="New session"
-					onClick={() => void create("sdk")}
+					onClick={(e) => {
+						e.stopPropagation();
+						void create("sdk");
+					}}
 					className="rounded-lg bg-blue-600 p-1.5 text-white hover:bg-blue-500"
 				>
 					+
@@ -380,7 +378,7 @@ export function Sidebar({
 			style={{ width: "var(--sidebar-w)" }}
 			data-testid="sidebar"
 		>
-			{/* New session */}
+			{/* New session + sidebar hide (header row) */}
 			<div className="titlebar-drag h-9 shrink-0" />
 			<div className="px-2.5 pb-2.5">
 				<div className="flex gap-1.5">
@@ -399,6 +397,16 @@ export function Sidebar({
 						className="rounded-lg bg-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
 					>
 						RPC
+					</button>
+					<button
+						type="button"
+						title="Hide sidebar (⌘\)"
+						data-testid="sidebar-collapse"
+						aria-label="Hide sidebar"
+						onClick={onToggleCollapse}
+						className="rounded-lg bg-neutral-800 px-2 py-1.5 text-neutral-300 hover:bg-neutral-700 hover:text-white"
+					>
+						<PanelLeftClose size={14} strokeWidth={2} />
 					</button>
 				</div>
 				<input
@@ -689,18 +697,6 @@ export function Sidebar({
 						profileMenuOpen ? "bg-neutral-900" : ""
 					}`}
 				>
-					<button
-						type="button"
-						title="Hide sidebar (⌘\)"
-						data-testid="sidebar-collapse"
-						onClick={(e) => {
-							e.stopPropagation();
-							onToggleCollapse();
-						}}
-						className="-ml-1 shrink-0 rounded p-0.5 text-neutral-600 hover:bg-neutral-800 hover:text-neutral-200"
-					>
-						<PanelLeftClose size={13} strokeWidth={2} />
-					</button>
 					<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-950 text-[10px] font-medium text-blue-400">
 						{initialsOf(userName)}
 					</span>
