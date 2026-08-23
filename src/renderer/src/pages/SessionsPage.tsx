@@ -227,10 +227,20 @@ export function SessionsPage({
 								}}
 								className="block w-full px-4 py-2 text-left hover:bg-neutral-900"
 							>
-								<div
-									className="text-xs text-neutral-300 [&_mark]:bg-blue-900 [&_mark]:text-blue-200"
-									dangerouslySetInnerHTML={{ __html: hit.snippet }}
-								/>
+								<div className="break-words text-xs text-neutral-300">
+								{hit.segments.map((seg, i) =>
+									seg.match ? (
+										<mark
+											key={i}
+											className="rounded-sm bg-blue-900 px-0.5 text-blue-200"
+										>
+											{seg.text}
+										</mark>
+									) : (
+										<span key={i}>{seg.text}</span>
+									)
+								)}
+							</div>
 								<div className="mt-0.5 font-mono text-[10px] text-neutral-600">
 									{hit.session_name ?? hit.session_id ?? "?"} · {hit.role}
 								</div>

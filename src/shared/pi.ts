@@ -672,11 +672,24 @@ export interface SessionOpenedResponse {
 	model: { provider: string; id: string; name: string } | undefined;
 }
 
+/**
+ * One run of snippet text from an FTS search hit.
+ *
+ * Search results are structured data, never HTML: SQLite's `snippet()` does not
+ * escape the content it wraps, so shipping markup would put verbatim session
+ * text (prompts, tool arguments, model output) into the DOM. The renderer puts
+ * each `text` in a text node instead.
+ */
+export interface SnippetSegment {
+	text: string;
+	match: boolean;
+}
+
 export interface SidecarSearchHit {
 	session_id: string | null;
 	entry_id: string;
 	role: string;
-	snippet: string;
+	segments: SnippetSegment[];
 	cwd: string | null;
 	session_name: string | null;
 }

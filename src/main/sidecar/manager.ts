@@ -12,18 +12,16 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import type { SidecarSearchHit } from "../../shared/pi";
 import { describeError } from "../pi/backend";
 
 export type SidecarStatus = "starting" | "healthy" | "degraded" | "stopped";
 
-export interface SearchHit {
-	session_id: string | null;
-	entry_id: string;
-	role: string;
-	snippet: string;
-	cwd: string | null;
-	session_name: string | null;
-}
+/**
+ * Re-exported from the shared contract rather than redeclared: the duplicate
+ * definition is how the renderer and this relay drifted apart before.
+ */
+export type SearchHit = SidecarSearchHit;
 
 export interface SidecarOptions {
 	appSupportDir: string;
