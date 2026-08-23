@@ -24,7 +24,13 @@ import { SidecarManager, type SearchHit } from "./sidecar/manager";
 import { StoreService } from "./store/service";
 import { FileBridge } from "./fs-bridge";
 import * as gitService from "./git-service";
-import { approveExtension } from "./pi/approve-extension";
+import { createPermissionExtension } from "./pi/approve-extension";
+import { setDefaultMode } from "./pi/permissions";
+import {
+	DEFAULT_PERMISSION_MODE,
+	isPermissionMode,
+	type PermissionMode,
+} from "../shared/pi";
 import { createDesktopTools } from "./pi/desktop-tools";
 import { PtyService } from "./pty-service";
 import { createLogger, type Logger } from "./services/logging";
@@ -135,13 +141,39 @@ app.whenReady()
 				showItemInFolder: (p) => void shellMod.showItemInFolder(p),
 			})
 		);
-		const confirmBeforeApply = storeService.getSettingRaw("confirmBeforeApply") !== false;
-		piService.setExtensionFactories(
-			confirmBeforeApply
-				? [{ name: "pi-desktop-approve", factory: approveExtension }]
-				: []
-		);
-		logger.info("main", `approval gate ${confirmBeforeApply ? "enabled" : "disabled"}`);
+		// Permission modes (phase 5): migrate the legacy boolean toggle once,
+		// then always register the mode extension. The extension itself no-ops
+		// in bypass mode, and reads live state so changes apply mid-session.
+		const store = storeService;
+		const log = logger;
+		if (store === undefined || log === undefined || piService === undefined) {
+			throw new Error("services not initialised");
+		}
+		const legacyConfirm = store.getSettingRaw("confirmBeforeApply");
+		const stored = store.getSettingRaw("permissionMode");
+		let defaultMode: PermissionMode;
+		if (isPermissionMode(stored)) {
+			defaultMode = stored;
+		} else {
+			defaultMode = legacyConfirm === false ? "bypass" : DEFAULT_PERMISSION_MODE;
+			store.setSettingRaw("permissionMode", defaultMode);
+			log.info(
+				"main",
+				`migrated confirmBeforeApply=${String(legacyConfirm)} -> permissionMode=${defaultMode}`,
+			);
+		}
+		setDefaultMode(defaultMode);
+		const service = piService;
+		piService.setExtensionFactories([
+			{
+				name: "pi-desktop-permissions",
+				factory: createPermissionExtension(() => service.getActiveAppSessionId()),
+			},
+		]);
+		piService.onDefaultModeChange = (mode) => {
+			store.setSettingRaw("permissionMode", mode);
+			log.info("main", `default permission mode set to ${mode}`);
+		};
 		router.handle("fs.list", async (req) => {
 			return { entries: await bridge.list(req.dirPath) };
 		});

@@ -40,6 +40,46 @@ export const piThinkingLevels = [
 ] as const;
 export type PiThinkingLevel = (typeof piThinkingLevels)[number];
 
+// ---------------------------------------------------------------------------
+// Permission modes (phase 5): agent autonomy ladder
+// ---------------------------------------------------------------------------
+
+/** Agent autonomy mode. Controls which tool classes require user approval. */
+export const permissionModes = [
+	"plan", // read-only research: edits + bash blocked
+	"alwaysAsk", // every gated call prompts
+	"askBeforeEdits", // default: edits + bash prompt, reads free
+	"acceptEdits", // file edits auto-accepted; bash still prompts
+	"bypass", // nothing prompts
+] as const;
+export type PermissionMode = (typeof permissionModes)[number];
+
+export const DEFAULT_PERMISSION_MODE: PermissionMode = "askBeforeEdits";
+
+export function isPermissionMode(v: unknown): v is PermissionMode {
+	return typeof v === "string" && (permissionModes as readonly string[]).includes(v);
+}
+
+/** Human label for pickers and Settings. */
+export const PERMISSION_MODE_LABEL: Record<PermissionMode, string> = {
+	plan: "Plan",
+	alwaysAsk: "Always Ask",
+	askBeforeEdits: "Ask Before Edits",
+	acceptEdits: "Accept File Edits",
+	bypass: "Bypass Permissions",
+};
+
+/**
+ * Reasons the permission extension attaches to blocked tool calls.
+ * Exported so renderer and main agree on exact strings — the transcript
+ * matches on these to style blocked calls distinctly (no free-text regex).
+ */
+export const PERMISSION_BLOCK_REASONS = {
+	plan: "Blocked by plan mode: present your plan as text; do not modify files or run commands.",
+	denied: "User denied this tool call. Ask before retrying.",
+} as const;
+
+
 // Explicit literals (not .map) so typebox infers a proper union -> Static union.
 export const PiThinkingLevelSchema = Type.Union([
 	Type.Literal("off"),
@@ -611,6 +651,31 @@ export const workspaceRootsRequestSchema = Type.Object({
 	type: Type.Literal("workspace.roots"),
 });
 
+// ---------------------------------------------------------------------------
+// Permission modes (phase 5)
+// ---------------------------------------------------------------------------
+
+export const PermissionModeSchema = Type.Union(
+	permissionModes.map((m) => Type.Literal(m)),
+);
+
+export const permissionSetModeRequestSchema = Type.Object({
+	type: Type.Literal("permission.set_mode"),
+	sessionId: Type.String(),
+	mode: PermissionModeSchema,
+});
+
+export const permissionSetDefaultRequestSchema = Type.Object({
+	type: Type.Literal("permission.set_default"),
+	mode: PermissionModeSchema,
+});
+
+export const permissionGetModeRequestSchema = Type.Object({
+	type: Type.Literal("permission.get_mode"),
+	sessionId: Type.String(),
+});
+
+
 export const sidecarSearchRequestSchema = Type.Object({
 	type: Type.Literal("sidecar.search"),
 	query: Type.String(),
@@ -750,6 +815,9 @@ export const piRequestSchemas = {
 	"session.abort_bash": sessionAbortBashRequestSchema,
 	"session.fork": sessionForkRequestSchema,
 	"session.respond_ui": sessionRespondUiRequestSchema,
+	"permission.set_mode": permissionSetModeRequestSchema,
+	"permission.set_default": permissionSetDefaultRequestSchema,
+	"permission.get_mode": permissionGetModeRequestSchema,
 	"session.delete_file": sessionDeleteFileRequestSchema,
 	"db.sessions.list": dbListRequestSchema,
 	"db.sessions.search": dbSearchRequestSchema,
@@ -831,6 +899,9 @@ export interface PiResponseMap {
 	"session.abort_bash": null;
 	"session.fork": { text?: string; cancelled: boolean };
 	"session.respond_ui": null;
+	"permission.set_mode": null;
+	"permission.set_default": null;
+	"permission.get_mode": { mode: PermissionMode };
 	"session.delete_file": null;
 	"db.sessions.list": { sessions: IndexedSession[] };
 	"db.sessions.search": { sessions: IndexedSession[] };

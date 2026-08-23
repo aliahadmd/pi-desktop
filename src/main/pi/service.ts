@@ -12,11 +12,18 @@ import type { RendererEventBus } from "../ipc/events";
 import type { IpcRouter } from "../ipc/router";
 import {
 	type PiEvent,
+	type PermissionMode,
 	type PiSessionSummary,
 	type SessionOpenedResponse,
 	type UiDialogResponse,
 } from "../../shared/pi";
 import { describeError, type BackendOptions, type IPiBackend } from "./backend";
+import {
+	clearSessionPermissions,
+	getMode,
+	setDefaultMode,
+	setMode,
+} from "./permissions";
 import { RpcPiBackend } from "./rpc-backend";
 import { SdkPiBackend } from "./sdk-backend";
 
@@ -25,6 +32,8 @@ interface SessionEntry {
 	/** Live project cwd. Mutable: a session switch re-points it (plan 009). */
 	cwd: string;
 	backend: IPiBackend;
+	/** Epoch ms when this session was opened — used for "most recent" resolution. */
+	startedAt: number;
 }
 
 /** Lifecycle + event hooks for observers (store, usage capture, UI). */
@@ -59,6 +68,27 @@ export class PiService {
 		this.hooksList.push(hooks);
 	}
 
+	/**
+	 * Most recently opened/used open session, or null. The permission
+	 * extension resolves tool_call events against this session's mode — the
+	 * event payload itself carries no session identity.
+	 */
+	getActiveAppSessionId(): string | null {
+		let latestId: string | null = null;
+		let latest = -1;
+		for (const [id, entry] of this.sessions) {
+			const started = entry.startedAt ?? 0;
+			if (started >= latest) {
+				latest = started;
+				latestId = id;
+			}
+		}
+		return latestId;
+	}
+
+	/** Set by index.ts to persist default-mode changes to StoreService. */
+	onDefaultModeChange?: (mode: PermissionMode) => void;
+
 	/** Provide the app-level ModelRuntime for all new SDK sessions. */
 	setSharedRuntime(runtime: unknown): void {
 		this.sharedRuntime = runtime;
@@ -85,6 +115,18 @@ export class PiService {
 			await this.closeSession(req.sessionId);
 			return null;
 		});
+		router.handle("permission.set_mode", async (req) => {
+			setMode(req.sessionId, req.mode);
+			return null;
+		});
+		router.handle("permission.set_default", async (req) => {
+			setDefaultMode(req.mode);
+			this.onDefaultModeChange?.(req.mode);
+			return null;
+		});
+		router.handle("permission.get_mode", (req) => ({
+			mode: getMode(req.sessionId),
+		}));
 		router.handle("session.prompt", async (req) => {
 			const backend = this.backend(req.sessionId);
 			await backend.prompt({
@@ -338,7 +380,12 @@ export class PiService {
 			);
 		}
 
-		this.sessions.set(id, { id, cwd: opts.cwd, backend });
+		this.sessions.set(id, {
+			id,
+			cwd: opts.cwd,
+			backend,
+			startedAt: Date.now(),
+		});
 		const state = await backend.getState().catch(() => undefined);
 		for (const hooks of this.hooksList) {
 			hooks.onSessionOpened?.({
@@ -362,6 +409,7 @@ export class PiService {
 		const entry = this.sessions.get(sessionId);
 		if (entry === undefined) return;
 		this.sessions.delete(sessionId);
+		clearSessionPermissions(sessionId);
 		for (const hooks of this.hooksList) hooks.onSessionClosed?.(sessionId);
 		await entry.backend.dispose().catch(() => {});
 	}
