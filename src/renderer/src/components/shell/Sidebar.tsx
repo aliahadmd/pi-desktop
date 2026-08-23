@@ -3,9 +3,26 @@
  * new-session split button, footer sheet triggers.
  */
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronRight, ChevronUp, Package } from "lucide-react";
+import {
+	ArrowUpDown,
+	ChevronUp,
+	FolderOpen,
+	FolderPlus,
+	Package,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { sortProjects, type ProjectSortMode } from "../../lib/project-sort";
+import { ProjectRow } from "./ProjectRow";
 import { useSessions } from "../../stores/pi-sessions";
+
+interface ProjectMeta {
+	id: string;
+	path: string;
+	name: string;
+	pinned: boolean;
+	pinnedAt: number;
+	sessionCount: number;
+}
 
 interface SidebarSession {
 	id: string;
@@ -92,6 +109,141 @@ export function Sidebar({
 			return maxB - maxA;
 		});
 	}, [sessions]);
+
+	// --- Phase 6: project metadata (pins, counts) + sorting -------------------
+	const [projectMeta, setProjectMeta] = useState<ProjectMeta[]>([]);
+	const [sortMode, setSortMode] = useState<ProjectSortMode>("recent");
+	const [sortOpen, setSortOpen] = useState(false);
+
+	useEffect(() => {
+		void window.piDesktop
+			.invoke({ type: "project.list" })
+			.then((r) => {
+				if (!r.ok) return;
+				setProjectMeta(
+					r.data.projects.map((p) => ({
+						id: p.id,
+						path: p.path,
+						name: p.name ?? p.path.split("/").filter(Boolean).pop() ?? p.path,
+						pinned: p.pinned,
+						pinnedAt: /* not exposed over IPC; order arrives pre-sorted */ 0,
+						sessionCount: p.sessionCount,
+					})),
+				);
+			})
+			.catch(() => {});
+	}, [sessions]);
+
+	useEffect(() => {
+		void window.piDesktop
+			.invoke({ type: "app.settings.get", key: "projectSort" })
+			.then((r) => {
+				if (r.ok && typeof r.data === "string") {
+					setSortMode(r.data as ProjectSortMode);
+				}
+			})
+			.catch(() => {});
+	}, []);
+
+	async function pickProject(): Promise<void> {
+		const picked = await window.piDesktop.invoke({ type: "app_pick_directory" });
+		if (!picked.ok || picked.data.path === null) return;
+		const folder: string = picked.data.path;
+		const r = await window.piDesktop.invoke({
+			type: "project.create",
+			path: folder,
+		});
+		if (!r.ok) return;
+		setCollapsedGroups((prev) => {
+			const next = new Set(prev);
+			next.delete(folder);
+			return next;
+		});
+	}
+
+	async function createInProject(cwd: string): Promise<void> {
+		setCreateError(null);
+		const result = await window.piDesktop.invoke({
+			type: "session.create",
+			cwd,
+			backend: "sdk",
+		});
+		if (!result.ok) {
+			setCreateError(result.error.message);
+			return;
+		}
+		const data = result.data as unknown as Parameters<typeof onOpenSession>[0];
+		useSessions.getState().open(
+			data as unknown as import("../../../../shared/pi").SessionOpenedResponse
+		);
+	}
+
+	function togglePin(projectPath: string): void {
+		const meta = projectMeta.find((m) => m.path === projectPath);
+		if (meta === undefined) return; // unknown project (never opened via picker)
+		const next = !meta.pinned;
+		setProjectMeta((prev) =>
+			prev.map((m) => (m.path === projectPath ? { ...m, pinned: next } : m)),
+		);
+		void window.piDesktop.invoke({
+			type: "project.pin",
+			projectId: meta.id,
+			pinned: next,
+		}).catch(() => {});
+	}
+
+	interface MergedGroup {
+		key: string;
+		name: string;
+		list: SidebarSession[];
+		pinned: boolean;
+		pinnedAt: number;
+		lastActivity: number;
+	}
+
+	const mergedGroups = useMemo<MergedGroup[]>(() => {
+		const byKey = new Map<string, MergedGroup>();
+		for (const [key, list] of groups) {
+			byKey.set(key, {
+				key,
+				name: key.split("/").filter(Boolean).pop() ?? key,
+				list,
+				pinned: false,
+				pinnedAt: 0,
+				lastActivity: Math.max(0, ...list.map((x) => x.updatedAt ?? 0)),
+			});
+		}
+		// Projects known to the store but without sessions still appear.
+		for (const m of projectMeta) {
+			if (!byKey.has(m.path)) {
+				byKey.set(m.path, {
+					key: m.path,
+					name: m.name,
+					list: [],
+					pinned: m.pinned,
+					pinnedAt: m.pinnedAt,
+					lastActivity: 0,
+				});
+			}
+		}
+		const merged = [...byKey.values()].map((g) => {
+			const meta = projectMeta.find((m) => m.path === g.key);
+			return { ...g, pinned: meta?.pinned ?? false };
+		});
+		return sortProjects(
+			merged.map((g) => ({
+				...g,
+				name: g.name,
+				pinnedAt: projectMeta.find((m) => m.path === g.key)?.pinnedAt ?? 0,
+				lastActivity: g.lastActivity,
+			})),
+			sortMode,
+		).map((g) => {
+			const original = byKey.get(g.key);
+			return { ...original, pinned: g.pinned } as MergedGroup;
+		});
+	}, [groups, projectMeta, sortMode]);
+	// ---------------------------------------------------------------------------
 
 	async function openSession(s: SidebarSession): Promise<void> {
 		// Already open? just focus.
@@ -269,23 +421,85 @@ export function Sidebar({
 				</button>
 			</div>
 
-			{/* Projects label */}
-			<div className="px-3 pt-2 pb-1 text-[9px] tracking-wide text-neutral-700 uppercase">
-				Projects
+			{/* Projects header: label + sort + create/open */}
+			<div className="flex items-center justify-between px-3 pt-2 pb-1">
+				<span className="text-[9px] tracking-wide text-neutral-700 uppercase">Projects</span>
+				<div className="relative flex items-center gap-0.5">
+					<button
+						type="button"
+						title={`Sort: ${sortMode}`}
+						data-testid="project-sort"
+						onClick={() => setSortOpen((v) => !v)}
+						className="rounded p-1 text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
+					>
+						<ArrowUpDown size={11} strokeWidth={2} />
+					</button>
+					{sortOpen && (
+						<div
+							className="absolute right-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 shadow-xl"
+							role="menu"
+						>
+							{(["recent", "name", "pinned"] as const).map((m) => (
+								<button
+									key={m}
+									type="button"
+									role="menuitem"
+									onClick={() => {
+										setSortMode(m);
+										void window.piDesktop.invoke({
+											type: "app.settings.set",
+											key: "projectSort",
+											value: JSON.stringify(m),
+										});
+										setSortOpen(false);
+									}}
+									className={`block w-full px-3 py-1 text-left text-xs hover:bg-neutral-800 ${
+										sortMode === m ? "text-blue-400" : "text-neutral-300"
+									}`}
+								>
+									{m === "recent" ? "Recent" : m === "name" ? "Name" : "Pinned"}
+								</button>
+							))}
+						</div>
+					)}
+					<button
+						type="button"
+						title="Create project from new folder…"
+						data-testid="project-create"
+						onClick={() => void pickProject()}
+						className="rounded p-1 text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
+					>
+						<FolderPlus size={12} strokeWidth={2} />
+					</button>
+					<button
+						type="button"
+						title="Open existing project…"
+						data-testid="project-open"
+						onClick={() => void pickProject()}
+						className="rounded p-1 text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
+					>
+						<FolderOpen size={12} strokeWidth={2} />
+					</button>
+				</div>
 			</div>
 
 			{/* Groups */}
 			<div className="flex-1 overflow-y-auto px-1.5 pb-2">
-				{groups.length === 0 ? (
+				{mergedGroups.length === 0 ? (
 					<p className="px-2 py-4 text-xs text-neutral-600">No sessions yet.</p>
 				) : (
-					groups.map(([project, list]) => {
+					mergedGroups.map((g) => {
+						const project = g.key;
+						const list = g.list;
 						const isCollapsed = collapsedGroups.has(project);
 						return (
 							<div key={project} className="mb-2">
-								<button
-									type="button"
-									onClick={() =>
+								<ProjectRow
+									name={g.name}
+									count={list.length}
+									pinned={g.pinned}
+									collapsed={isCollapsed}
+									onToggle={() =>
 										setCollapsedGroups((prev) => {
 											const next = new Set(prev);
 											if (next.has(project)) next.delete(project);
@@ -293,18 +507,17 @@ export function Sidebar({
 											return next;
 										})
 									}
-									className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left hover:bg-neutral-900"
-								>
-									<span className={`text-neutral-600 transition-transform ${isCollapsed ? "" : "rotate-90"}`}>
-										<ChevronRight size={10} strokeWidth={2} />
-									</span>
-									<span className="truncate text-[11px] font-medium text-neutral-400">
-										{project.split("/").pop() || project}
-									</span>
-									<span className="ml-auto font-mono text-[9px] text-neutral-700">
-										{list.length}
-									</span>
-								</button>
+									onNewSession={() => {
+										if (project === "(unknown)") return; // needs a real folder
+										void createInProject(project);
+									}}
+									onTogglePin={() => togglePin(project)}
+								/>
+								{list.length === 0 && !isCollapsed && (
+									<p className="px-6 py-1 text-[10px] italic text-neutral-600">
+										No sessions yet — press +
+									</p>
+								)}
 								<AnimatePresence initial={false}>
 									{!isCollapsed && (
 										<motion.div
