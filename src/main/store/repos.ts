@@ -51,6 +51,34 @@ export class SessionsRepo {
 	}
 
 	upsert(s: SessionUpsert): void {
+		const row = {
+			id: s.id,
+			file_path: s.file_path,
+			name: s.name ?? null,
+			cwd: s.cwd ?? null,
+			created_at: s.createdAt ?? null,
+			updated_at: s.updatedAt ?? null,
+			message_count: s.messageCount ?? 0,
+			first_message: s.firstMessage ?? null,
+			model_provider: s.modelProvider ?? null,
+			model_id: s.modelId ?? null,
+			now: Date.now(),
+		};
+		// A session file is the source of truth for its own identity: pi can
+		// rewrite the header id (fork/switch/recovery), leaving a stale-id row
+		// sitting on this path. Adopting the file's id keeps UNIQUE(file_path)
+		// from rejecting every later reindex pass. If the incoming id is held
+		// by a DIFFERENT path, that path is a duplicate of this file; drop it
+		// in favour of the file we just read.
+		const existing = this.db
+			.prepare("SELECT id FROM sessions WHERE file_path = ?")
+			.get(s.file_path) as { id: string } | undefined;
+		if (existing !== undefined && existing.id !== s.id) {
+			this.db
+				.prepare("DELETE FROM sessions WHERE id = ? AND file_path <> ?")
+				.run(s.id, s.file_path);
+			this.db.prepare("UPDATE sessions SET id = ? WHERE file_path = ?").run(s.id, s.file_path);
+		}
 		this.db
 			.prepare(
 				`
@@ -70,19 +98,7 @@ export class SessionsRepo {
 					indexed_at = excluded.indexed_at
 				`
 			)
-			.run({
-				id: s.id,
-				file_path: s.file_path,
-				name: s.name ?? null,
-				cwd: s.cwd ?? null,
-				created_at: s.createdAt ?? null,
-				updated_at: s.updatedAt ?? null,
-				message_count: s.messageCount ?? 0,
-				first_message: s.firstMessage ?? null,
-				model_provider: s.modelProvider ?? null,
-				model_id: s.modelId ?? null,
-				now: Date.now(),
-			});
+			.run(row);
 	}
 
 	get(id: string): SessionRow | undefined {

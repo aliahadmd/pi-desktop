@@ -70,6 +70,35 @@ describe("sessions repo", () => {
 		expect(sessions.get("s1")).toBeDefined();
 		expect(sessions.get("s2")).toBeUndefined();
 	});
+
+	it("adopts the new header id when a session file rewrites it", () => {
+		// Production sequence (audit follow-up): pi rewrote the header of
+		// /p.jsonl, so reindex now reports id s2 for a row stored as s1.
+		sessions.upsert({ id: "s1", file_path: "/p.jsonl", firstMessage: "original" });
+		expect(() => sessions.upsert({ id: "s2", file_path: "/p.jsonl" })).not.toThrow();
+		// The file wins: one row, new id, history fields preserved.
+		expect(sessions.get("s1")).toBeUndefined();
+		const row = sessions.get("s2");
+		expect(row?.file_path).toBe("/p.jsonl");
+		expect(row?.first_message).toBe("original");
+	});
+
+	it("prefers the freshly read file when the incoming id collides with another path", () => {
+		sessions.upsert({ id: "s2", file_path: "/old-location.jsonl" });
+		// A duplicate copy of the same session now lives at /p.jsonl and its
+		// header carries id s2; the stale path must yield.
+		sessions.upsert({ id: "s2", file_path: "/p.jsonl" });
+		expect(sessions.get("s2")?.file_path).toBe("/p.jsonl");
+		expect(sessions.list().filter((r) => r.id === "s2")).toHaveLength(1);
+	});
+
+	it("is a no-op when id and path already agree", () => {
+		sessions.upsert({ id: "s1", file_path: "/a.jsonl", firstMessage: "keep" });
+		sessions.upsert({ id: "s1", file_path: "/a.jsonl", messageCount: 3 });
+		const row = sessions.get("s1");
+		expect(row?.first_message).toBe("keep");
+		expect(row?.message_count).toBe(3);
+	});
 });
 
 describe("usage repo", () => {
