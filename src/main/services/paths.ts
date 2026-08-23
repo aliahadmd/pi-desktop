@@ -36,7 +36,11 @@ const LOG_RETENTION_DAYS = 14;
 export function pruneOldLogs(logsDir: string, now = Date.now()): void {
 	try {
 		for (const name of readdirSync(logsDir)) {
-			if (!name.endsWith(".log")) continue;
+			// Rotation renames `pidesktop-YYYYMMDD.log` to
+			// `pidesktop-YYYYMMDD.log.<ts>.rotated`, so an `.endsWith(".log")`
+			// test never matched the rotated chunks and they lived forever.
+			// Match the whole family, and nothing that is not ours.
+			if (!name.startsWith("pidesktop-") || !name.includes(".log")) continue;
 			const filePath = path.join(logsDir, name);
 			const ageDays = (now - getMtimeMs(filePath)) / 86_400_000;
 			if (ageDays > LOG_RETENTION_DAYS) rmSync(filePath, { force: true });
