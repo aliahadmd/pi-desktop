@@ -3,7 +3,15 @@
  * "/" palette, steer/follow-up segmented toggle, attach row, git-strip slot.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, FileText, GitBranch, ListTodo, X } from "lucide-react";
+import {
+	ArrowDown,
+	ArrowUp,
+	FileText,
+	FolderOpen,
+	GitBranch,
+	ListTodo,
+	X,
+} from "lucide-react";
 import type { PiImageInput, PiModelInfo, PiThinkingLevel, PermissionMode } from "../../../../shared/pi";
 import { ModePicker } from "./ModePicker";
 import { ModelPicker } from "./ModelPicker";
@@ -33,6 +41,7 @@ export function Composer({
 	onOpenReview,
 	projectRoot,
 	modelName,
+	projectName,
 	models,
 	currentModel,
 	onPickModel,
@@ -53,6 +62,8 @@ export function Composer({
 	onOpenReview(): void;
 	projectRoot: string | null;
 	modelName?: string | undefined;
+	/** Folder basename of the active session's project; omit to hide the chip. */
+	projectName?: string | undefined;
 	/** Full catalog for the searchable picker; omit to render a passive chip. */
 	models?: PiModelInfo[] | undefined;
 	currentModel?: { provider: string; id: string; name: string } | undefined;
@@ -387,6 +398,15 @@ export function Composer({
 									mode={permissionMode}
 									onPick={(m) => onPickPermissionMode?.(m)}
 								/>
+							)}
+							{projectName !== undefined && (
+								<span
+									className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-neutral-400"
+									title={`Project: ${projectName}`}
+								>
+									<FolderOpen size={11} strokeWidth={2} />
+									{projectName}
+								</span>
 							)}
 							{modelName !== undefined && (
 								<ModelPicker

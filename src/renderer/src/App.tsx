@@ -111,6 +111,7 @@ export default function App(): React.JSX.Element {
 				>
 					<Sidebar
 						collapsed={sidebarCollapsed}
+						onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
 						onOpenSession={(response) => {
 							useSessions.getState().open(response);
 							setSheet(null);

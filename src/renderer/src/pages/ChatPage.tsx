@@ -569,6 +569,11 @@ export default function ChatPage({
 							onOpenPalette={() => setDockTab("commands")}
 							onOpenReview={() => setDockTab("review")}
 							modelName={active.model?.name}
+							projectName={
+								active.cwd !== null && active.cwd !== ""
+									? active.cwd.split("/").filter(Boolean).pop()
+									: undefined
+							}
 							permissionMode={permissionMode}
 							onPickPermissionMode={(mode) => {
 								if (activeId === null) return;

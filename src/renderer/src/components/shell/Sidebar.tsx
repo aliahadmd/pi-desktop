@@ -9,6 +9,8 @@ import {
 	FolderOpen,
 	FolderPlus,
 	Package,
+	PanelLeftClose,
+	PanelLeftOpen,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sortProjects, type ProjectSortMode } from "../../lib/project-sort";
@@ -54,10 +56,12 @@ function relTime(ts: number | null): string {
 
 export function Sidebar({
 	collapsed,
+	onToggleCollapse,
 	onOpenSession,
 	onOpenSheet,
 }: {
 	collapsed: boolean;
+	onToggleCollapse(): void;
 	onOpenSession(response: import("../../../../shared/pi").SessionOpenedResponse): void;
 	onOpenSheet(sheet: "models" | "settings" | "trust" | "browse" | "packages"): void;
 }): React.JSX.Element {
@@ -332,6 +336,15 @@ export function Sidebar({
 				style={{ width: "var(--sidebar-rail-w)" }}
 			>
 				<div className="titlebar-drag absolute left-0 top-0 h-10 w-full" />
+				<button
+					type="button"
+					title="Show sidebar (⌘\)"
+					data-testid="sidebar-expand"
+					onClick={onToggleCollapse}
+					className="rounded p-1.5 text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+				>
+					<PanelLeftOpen size={14} strokeWidth={2} />
+				</button>
 				<button
 					type="button"
 					title="New session"
@@ -674,6 +687,18 @@ export function Sidebar({
 						profileMenuOpen ? "bg-neutral-900" : ""
 					}`}
 				>
+					<button
+						type="button"
+						title="Hide sidebar (⌘\)"
+						data-testid="sidebar-collapse"
+						onClick={(e) => {
+							e.stopPropagation();
+							onToggleCollapse();
+						}}
+						className="-ml-1 shrink-0 rounded p-0.5 text-neutral-600 hover:bg-neutral-800 hover:text-neutral-200"
+					>
+						<PanelLeftClose size={13} strokeWidth={2} />
+					</button>
 					<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-950 text-[10px] font-medium text-blue-400">
 						{initialsOf(userName)}
 					</span>
