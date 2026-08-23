@@ -9,6 +9,7 @@ export function ProjectRow({
 	count,
 	pinned,
 	collapsed,
+	projectId,
 	onToggle,
 	onNewSession,
 	onTogglePin,
@@ -17,6 +18,7 @@ export function ProjectRow({
 	count: number;
 	pinned: boolean;
 	collapsed: boolean;
+	projectId?: string | undefined;
 	onToggle(): void;
 	onNewSession(): void;
 	onTogglePin(): void;
@@ -44,7 +46,7 @@ export function ProjectRow({
 				<button
 					type="button"
 					title={`New session in ${name}`}
-					data-testid={`project-new-${name}`}
+					data-testid={projectId !== undefined ? `project-new-${projectId}` : undefined}
 					onClick={(e) => {
 						e.stopPropagation();
 						onNewSession();
@@ -56,7 +58,7 @@ export function ProjectRow({
 				<button
 					type="button"
 					title={pinned ? "Unpin project" : "Pin project"}
-					data-testid={`project-pin-${name}`}
+					data-testid={projectId !== undefined ? `project-pin-${projectId}` : undefined}
 					onClick={(e) => {
 						e.stopPropagation();
 						onTogglePin();

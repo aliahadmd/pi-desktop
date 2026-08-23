@@ -203,18 +203,22 @@ export function Sidebar({
 		pinned: boolean;
 		pinnedAt: number;
 		lastActivity: number;
+		/** Store id when this group is a known project; undefined otherwise. */
+		projectId?: string | undefined;
 	}
 
 	const mergedGroups = useMemo<MergedGroup[]>(() => {
 		const byKey = new Map<string, MergedGroup>();
 		for (const [key, list] of groups) {
+			const meta = projectMeta.find((m) => m.path === key);
 			byKey.set(key, {
 				key,
 				name: key.split("/").filter(Boolean).pop() ?? key,
 				list,
-				pinned: false,
-				pinnedAt: 0,
+				pinned: meta?.pinned ?? false,
+				pinnedAt: meta?.pinnedAt ?? 0,
 				lastActivity: Math.max(0, ...list.map((x) => x.updatedAt ?? 0)),
+				...(meta !== undefined ? { projectId: meta.id } : {}),
 			});
 		}
 		// Projects known to the store but without sessions still appear.
@@ -227,25 +231,22 @@ export function Sidebar({
 					pinned: m.pinned,
 					pinnedAt: m.pinnedAt,
 					lastActivity: 0,
+					projectId: m.id,
 				});
 			}
 		}
-		const merged = [...byKey.values()].map((g) => {
-			const meta = projectMeta.find((m) => m.path === g.key);
-			return { ...g, pinned: meta?.pinned ?? false };
-		});
 		return sortProjects(
-			merged.map((g) => ({
-				...g,
+			[...byKey.values()].map((g) => ({
+				key: g.key,
 				name: g.name,
-				pinnedAt: projectMeta.find((m) => m.path === g.key)?.pinnedAt ?? 0,
+				pinned: g.pinned,
+				pinnedAt: g.pinnedAt,
 				lastActivity: g.lastActivity,
+				list: g.list,
+				projectId: g.projectId,
 			})),
 			sortMode,
-		).map((g) => {
-			const original = byKey.get(g.key);
-			return { ...original, pinned: g.pinned } as MergedGroup;
-		});
+		);
 	}, [groups, projectMeta, sortMode]);
 	// ---------------------------------------------------------------------------
 
@@ -512,6 +513,7 @@ export function Sidebar({
 									count={list.length}
 									pinned={g.pinned}
 									collapsed={isCollapsed}
+									projectId={g.projectId}
 									onToggle={() =>
 										setCollapsedGroups((prev) => {
 											const next = new Set(prev);
