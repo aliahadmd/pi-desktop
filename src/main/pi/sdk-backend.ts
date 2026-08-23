@@ -159,7 +159,21 @@ export class SdkPiBackend implements IPiBackend {
 	}
 
 	getCwd(): string {
-		return this.options.cwd;
+		return this.currentCwd();
+	}
+
+	/**
+	 * Live cwd of the open session.
+	 *
+	 * `switchSession` rebuilds the runtime at the target session's cwd, so the
+	 * boot-time `options.cwd` goes stale the moment a switch lands. The session
+	 * manager is the runtime's own source of truth (upstream reads the target
+	 * session header into it), so ask it and fall back to the boot value only
+	 * when no session is open yet.
+	 */
+	private currentCwd(): string {
+		const cwd = this.session?.sessionManager.getCwd();
+		return cwd !== undefined && cwd.length > 0 ? cwd : this.options.cwd;
 	}
 
 	async prompt(input: PromptInput): Promise<void> {
@@ -384,7 +398,7 @@ export class SdkPiBackend implements IPiBackend {
 			type: "session_replaced",
 			sessionId: session.sessionId,
 			...(session.sessionFile !== undefined ? { sessionFile: session.sessionFile } : {}),
-			cwd: this.options.cwd,
+			cwd: this.currentCwd(),
 		});
 	}
 

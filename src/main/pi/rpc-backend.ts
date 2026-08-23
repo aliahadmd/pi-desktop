@@ -332,16 +332,19 @@ export class RpcPiBackend implements IPiBackend {
 
 	/** Session replacement signal for the renderer (state fetched best-effort). */
 	private async notifyReplaced(): Promise<void> {
-		let cwdInfo: string | undefined;
+		let sessionFile: string | undefined;
 		try {
 			const state = (await this.getState()) as PiSessionState;
-			cwdInfo = state.sessionFile;
+			sessionFile = state.sessionFile;
 		} catch {
-			cwdInfo = undefined;
+			sessionFile = undefined;
 		}
+		// Deliberately no `cwd`: an RPC session file may be remote-relative, so we
+		// have no trustworthy local cwd to report. The renderer treats an absent
+		// cwd as "unchanged", which beats asserting a stale one.
 		this.options.onEvent({
 			type: "session_replaced",
-			...(cwdInfo !== undefined ? { sessionFile: cwdInfo } : {}),
+			...(sessionFile !== undefined ? { sessionFile } : {}),
 		});
 	}
 
