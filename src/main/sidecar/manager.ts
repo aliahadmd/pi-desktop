@@ -212,6 +212,11 @@ export class SidecarManager {
 	}
 
 	private startHealthPolling(): void {
+		// A restart calls start() again without going through stop(), so the
+		// previous generation's interval would otherwise keep polling a dead
+		// port for the life of the process.
+		if (this.healthTimer !== null) clearInterval(this.healthTimer);
+		this.healthTimer = null;
 		this.setStatus("starting");
 		const poll = async (): Promise<void> => {
 			try {

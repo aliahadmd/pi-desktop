@@ -71,3 +71,56 @@ describe("SidecarManager", () => {
 		expect(hits).toEqual([]);
 	});
 });
+
+/**
+ * Audit M-7: only stop() cleared healthTimer, so every restart cycle stacked a
+ * fresh interval and the dead generation kept polling a dead port.
+ *
+ * Driven against the real class with a stubbed timer pair rather than a mock
+ * framework: startHealthPolling is private, so reach it the same way the other
+ * tests reach `port`.
+ */
+describe("health poll interval lifecycle", () => {
+	it("clears the previous interval before starting a new one", () => {
+		const cleared: unknown[] = [];
+		const realSetInterval = globalThis.setInterval;
+		const realClearInterval = globalThis.clearInterval;
+		let handleSeq = 0;
+		try {
+			globalThis.setInterval = ((): NodeJS.Timeout => {
+				handleSeq += 1;
+				// unref() is called on the result; return a shape that supports it.
+				return { id: handleSeq, unref: () => undefined } as unknown as NodeJS.Timeout;
+			}) as unknown as typeof setInterval;
+			globalThis.clearInterval = ((handle: unknown) => {
+				cleared.push(handle);
+			}) as unknown as typeof clearInterval;
+
+			const subject = new SidecarManager({
+				appSupportDir: "/tmp/pidesktop-timer-test",
+				agentDir: "/tmp/pidesktop-timer-test/agent",
+				onStatus: () => undefined,
+			}) as unknown as {
+				startHealthPolling(): void;
+				healthTimer: { id: number } | null;
+			};
+
+			subject.startHealthPolling();
+			const first = subject.healthTimer;
+			expect(first).not.toBeNull();
+			expect(cleared).toHaveLength(0);
+
+			// Simulate the restart path: start() runs again without stop().
+			subject.startHealthPolling();
+			const second = subject.healthTimer;
+
+			// The first generation was cleared, and exactly one timer is live.
+			expect(cleared).toHaveLength(1);
+			expect(cleared[0]).toBe(first);
+			expect(second).not.toBe(first);
+		} finally {
+			globalThis.setInterval = realSetInterval;
+			globalThis.clearInterval = realClearInterval;
+		}
+	});
+});
