@@ -5,3 +5,7 @@ release/
 .DS_Store
 piplan/
 pibugs/
+
+# Python bytecode from the sidecar
+__pycache__/
+*.pyc
