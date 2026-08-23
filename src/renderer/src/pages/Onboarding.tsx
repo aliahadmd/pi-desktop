@@ -7,8 +7,12 @@ import type { ProviderAuthInfo } from "../../../shared/pi";
 
 export function Onboarding({
 	onDone,
+	onSkip,
 }: {
+	/** Configuration succeeded: the providers check alone governs future launches. */
 	onDone(): void;
+	/** Dismissed without configuring: the caller persists that choice. */
+	onSkip(): void;
 }): React.JSX.Element {
 	const [providers, setProviders] = useState<ProviderAuthInfo[]>([]);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -112,7 +116,7 @@ export function Onboarding({
 				<div className="mt-5 flex justify-end gap-2">
 					<button
 						type="button"
-						onClick={onDone}
+						onClick={onSkip}
 						className="rounded px-3 py-2 text-xs text-neutral-500 hover:text-neutral-300"
 					>
 						Skip for now

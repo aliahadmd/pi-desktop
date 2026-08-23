@@ -57,14 +57,22 @@ export default function App(): React.JSX.Element {
 	useEffect(() => bindPiEvents(), []);
 
 	useEffect(() => {
-		void window.piDesktop.invoke({ type: "auth.providers" }).then((r) => {
+		void (async () => {
+			// "Skip for now" must survive a relaunch: without a persisted flag the
+			// modal reappeared on every launch until a provider was configured.
+			const dismissed = await window.piDesktop.invoke({
+				type: "app.settings.get",
+				key: "onboardingDismissed",
+			});
+			const skipped = dismissed.ok && dismissed.data === true;
+			const r = await window.piDesktop.invoke({ type: "auth.providers" });
 			setOnboardingChecked(true);
 			if (!r.ok) return;
 			const anyConfigured = (
 				r.data as { providers: Array<{ configured: boolean }> }
 			).providers.some((p) => p.configured);
-			if (!anyConfigured) setShowOnboarding(true);
-		});
+			if (!anyConfigured && !skipped) setShowOnboarding(true);
+		})();
 	}, []);
 
 	// ⌘\ toggles sidebar collapse.
@@ -120,6 +128,16 @@ export default function App(): React.JSX.Element {
 						<Onboarding
 							onDone={() => {
 								setShowOnboarding(false);
+							}}
+							onSkip={() => {
+								setShowOnboarding(false);
+								// Remember the dismissal; configuring a provider needs no
+								// flag because the providers check covers that case.
+								void window.piDesktop.invoke({
+									type: "app.settings.set",
+									key: "onboardingDismissed",
+									value: JSON.stringify(true),
+								});
 							}}
 						/>
 					)}
