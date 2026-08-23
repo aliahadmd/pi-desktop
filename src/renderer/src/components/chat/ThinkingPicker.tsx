@@ -6,6 +6,7 @@
  * conventions — upward, click-away backdrop, Esc closes.
  */
 import { useEffect, useRef, useState } from "react";
+import { Brain } from "lucide-react";
 import { piThinkingLevels, type PiThinkingLevel } from "../../../../shared/pi";
 
 export function ThinkingPicker({
@@ -50,9 +51,10 @@ export function ThinkingPicker({
 				aria-haspopup="listbox"
 				aria-expanded={open}
 				onClick={() => setOpen((v) => !v)}
-				className="rounded-md px-1.5 py-1 font-mono text-[10px] text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
+				className="flex items-center gap-1 rounded-md px-1.5 py-1 font-mono text-[10px] text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
 			>
-				🧠 {level ?? "off"}
+				<Brain size={11} strokeWidth={2} />
+				{level ?? "off"}
 			</button>
 			{open && (
 				<div

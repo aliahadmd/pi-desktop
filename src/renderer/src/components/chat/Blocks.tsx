@@ -5,6 +5,16 @@
 import { memo, useState, type ReactNode } from "react";
 import { useTranscriptUi } from "../../stores/transcript-ui";
 import Ansi from "ansi-to-react";
+import {
+	Check,
+	ChevronDown,
+	ChevronRight,
+	LoaderCircle,
+	Minus,
+	Plus,
+	Wrench,
+	X,
+} from "lucide-react";
 import { Markdown } from "./Markdown";
 import type {
 	AssistantBlock,
@@ -62,8 +72,8 @@ const ToolBlockView = memo(function ToolBlockView({
 	const expanded = useTranscriptUi((s) => s.isExpanded(key, fallback));
 	const toggleExpanded = useTranscriptUi((s) => s.toggleExpanded);
 	const isDiffOutput = block.status !== "running" && isDiff(block.output);
-	const statusIcon =
-		block.status === "running" ? "⟳" : block.status === "error" ? "✗" : "✓";
+	const StatusIcon =
+		block.status === "running" ? LoaderCircle : block.status === "error" ? X : Check;
 	const statusCls =
 		block.status === "running"
 			? "text-blue-400"
@@ -83,14 +93,22 @@ const ToolBlockView = memo(function ToolBlockView({
 					onClick={() => toggleExpanded(key, fallback)}
 					className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-xs"
 				>
-					<span className={statusCls}>{statusIcon}</span>
+					<span className={`flex shrink-0 items-center ${statusCls}`}>
+						<StatusIcon
+							size={12}
+							strokeWidth={2.25}
+							className={block.status === "running" ? "animate-spin" : undefined}
+						/>
+					</span>
 					<span className="font-medium text-neutral-300">{block.toolName}</span>
 					{block.argsJson !== undefined && (
 						<span className="truncate font-mono text-[10px] text-neutral-500">
 							{block.argsJson.slice(0, 120)}
 						</span>
 					)}
-					<span className="ml-auto text-[10px] text-neutral-600">{expanded ? "−" : "+"}</span>
+					<span className="ml-auto flex shrink-0 items-center text-neutral-600">
+						{expanded ? <Minus size={11} /> : <Plus size={11} />}
+					</span>
 				</button>
 				{isDirectBash && block.status === "running" && (
 					<button
@@ -131,7 +149,10 @@ function ThinkingPartView({ text, uiKey }: { text: string; uiKey: string }): Rea
 				onClick={() => toggleExpanded(uiKey, false)}
 				className="text-[10px] tracking-wide text-neutral-500 uppercase hover:text-neutral-400"
 			>
-				{open ? "▾" : "▸"} Thinking
+				<span className="flex items-center gap-1">
+					{open ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+					Thinking
+				</span>
 			</button>
 			{open && (
 				<div className="mt-1 border-l-2 border-neutral-700 pl-3 text-xs whitespace-pre-wrap text-neutral-400 italic">
@@ -173,7 +194,9 @@ const AssistantBlockView = memo(function AssistantBlockView({
 							onClick={() => onToolClick?.(part.toolCallId)}
 							className="mr-2 mb-1 inline-flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 font-mono text-[10px] text-neutral-300 hover:bg-neutral-700"
 						>
-							<span className={streaming ? "text-blue-400" : "text-green-500"}>⚒</span>
+							<span className={`flex shrink-0 items-center ${streaming ? "text-blue-400" : "text-green-500"}`}>
+								<Wrench size={10} strokeWidth={2} />
+							</span>
 							{part.toolName}
 						</button>
 					);
@@ -209,7 +232,15 @@ const AssistantBlockView = memo(function AssistantBlockView({
 							}}
 							className="text-[10px] text-neutral-600 hover:text-neutral-300"
 						>
-							{copied ? "✓ copied" : "copy"}
+							<span className="flex shrink-0 items-center text-[10px]">
+							{copied ? (
+								<span className="flex items-center gap-1 text-green-500">
+									<Check size={10} strokeWidth={2.5} /> copied
+								</span>
+							) : (
+								"copy"
+							)}
+						</span>
 						</button>
 					)}
 					{(block.usageTokens !== undefined || block.model !== undefined) && (
@@ -254,10 +285,11 @@ const NoticeBlockView = memo(function NoticeBlockView({
 					type="button"
 					onClick={() => dismiss(key)}
 					className="shrink-0 opacity-50 hover:opacity-100"
-					title="Dismiss"
-				>
-					×
-				</button>
+						title="Dismiss"
+						aria-label="Dismiss notice"
+					>
+						<X size={12} strokeWidth={2} />
+					</button>
 			</div>
 		</div>
 	);
@@ -287,11 +319,17 @@ const ToolGroupView = function ToolGroupView({
 				onClick={() => toggleExpanded(key, fallback)}
 				className="flex w-full items-center gap-2 px-4 py-1 text-left text-xs text-neutral-400 hover:bg-neutral-900/50"
 			>
-				<span className={running ? "text-blue-400" : errored ? "text-red-400" : "text-green-500"}>
-					{running ? "⟳" : errored ? "✗" : "✓"}
+				<span className={`flex shrink-0 items-center ${running ? "text-blue-400" : errored ? "text-red-400" : "text-green-500"}`}>
+					{running ? (
+						<LoaderCircle size={12} strokeWidth={2.25} className="animate-spin" />
+					) : errored ? (
+						<X size={12} strokeWidth={2.25} />
+					) : (
+						<Check size={12} strokeWidth={2.25} />
+					)}
 				</span>
-				<span>
-					{expanded ? "▾" : "▸"}{" "}
+				<span className="flex items-center gap-1">
+					{expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
 					{running ? label : `${label.charAt(0).toUpperCase()}${label.slice(1)}`}
 				</span>
 			</button>

@@ -3,6 +3,13 @@
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Ansi from "ansi-to-react";
+import {
+	Check,
+	ChevronDown,
+	ChevronRight,
+	SquareArrowOutUpRight,
+	X,
+} from "lucide-react";
 import { Markdown } from "../chat/Markdown";
 import { parseArgumentHintFromHint } from "../../lib/command-hints";
 
@@ -53,26 +60,31 @@ function ExplorerRow({
 			style={{ paddingLeft: `${depth * 12 + 12}px` }}
 		>
 			<button
-				type="button"
-				onClick={onToggle}
-				className={`min-w-0 flex-1 truncate py-0.5 pr-2 text-left text-xs ${
-					entry.type === "dir" ? "text-neutral-300" : "text-neutral-400"
-				}`}
-				title={full}
-			>
-				{entry.type === "dir" ? (expanded ? "▾ " : "▸ ") : ""}
-				{entry.name}
-			</button>
-			{entry.type === "file" && onOpenInEditor !== undefined && (
-				<button
 					type="button"
-					title="Open in editor"
-					onClick={() => onOpenInEditor(full)}
-					className="mr-2 hidden shrink-0 rounded px-1 text-[10px] text-neutral-600 hover:text-neutral-200 group-hover:block"
+					onClick={onToggle}
+					className={`flex min-w-0 flex-1 items-center gap-1 truncate py-0.5 pr-2 text-left text-xs ${
+						entry.type === "dir" ? "text-neutral-300" : "text-neutral-400"
+					}`}
+					title={full}
 				>
-					↗
+					{entry.type === "dir" && (
+						<span className="flex shrink-0 items-center">
+							{expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+						</span>
+					)}
+					{entry.type !== "dir" && <span className="w-[10px] shrink-0" />}
+					<span className="truncate">{entry.name}</span>
 				</button>
-			)}
+				{entry.type === "file" && onOpenInEditor !== undefined && (
+					<button
+						type="button"
+						title="Open in editor"
+						onClick={() => onOpenInEditor(full)}
+						className="mr-2 hidden shrink-0 rounded px-1 text-neutral-600 hover:text-neutral-200 group-hover:block"
+					>
+						<SquareArrowOutUpRight size={10} strokeWidth={2} />
+					</button>
+				)}
 		</div>
 	);
 }
@@ -576,10 +588,14 @@ export function ReviewQueue({ blocks }: { blocks: Block[] }): React.JSX.Element 
 					<div key={b.id} className="mb-2 rounded border border-neutral-800">
 						<div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-1.5">
 							<span
-								className={`text-[10px] ${b.status === "error" ? "text-red-400" : "text-green-500"}`}
-							>
-								{b.status === "error" ? "✗" : "✓"}
-							</span>
+									className={`flex shrink-0 items-center ${b.status === "error" ? "text-red-400" : "text-green-500"}`}
+								>
+									{b.status === "error" ? (
+										<X size={11} strokeWidth={2.25} />
+									) : (
+										<Check size={11} strokeWidth={2.25} />
+									)}
+								</span>
 							<span className="text-xs text-neutral-300">{b.toolName}</span>
 							{b.argsJson !== undefined && (
 								<span className="truncate font-mono text-[9px] text-neutral-600">

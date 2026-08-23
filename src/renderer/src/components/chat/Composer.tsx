@@ -3,6 +3,7 @@
  * "/" palette, steer/follow-up segmented toggle, attach row, git-strip slot.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, FileText, GitBranch, X } from "lucide-react";
 import type { PiImageInput, PiModelInfo, PiThinkingLevel } from "../../../../shared/pi";
 import { ModelPicker } from "./ModelPicker";
 import { ThinkingPicker } from "./ThinkingPicker";
@@ -215,15 +216,28 @@ export function Composer({
 					className="mb-1.5 flex items-center gap-2 rounded-t-lg border border-b-0 border-neutral-800 bg-neutral-900/60 px-4 py-1.5 font-mono text-[10px] text-neutral-400"
 					data-testid="git-strip"
 				>
-					<span>⎇ {git.branch ?? "no branch"}</span>
+					<span className="flex items-center gap-1">
+					<GitBranch size={10} strokeWidth={2} />
+					{git.branch ?? "no branch"}
+				</span>
 					{(git.staged > 0 || git.unstaged > 0) && (
 						<span>
 							{git.staged > 0 && <span className="text-green-500">+{git.staged} </span>}
 							{git.unstaged > 0 && <span className="text-red-400">−{git.unstaged}</span>}
 						</span>
 					)}
-					{git.ahead > 0 && <span className="text-neutral-500">↑{git.ahead}</span>}
-					{git.behind > 0 && <span className="text-neutral-500">↓{git.behind}</span>}
+					{git.ahead > 0 && (
+						<span className="flex items-center gap-0.5 text-neutral-500">
+							<ArrowUp size={9} strokeWidth={2} />
+							{git.ahead}
+						</span>
+					)}
+					{git.behind > 0 && (
+						<span className="flex items-center gap-0.5 text-neutral-500">
+							<ArrowDown size={9} strokeWidth={2} />
+							{git.behind}
+						</span>
+					)}
 					<button
 						type="button"
 						onClick={onOpenReview}
@@ -280,15 +294,20 @@ export function Composer({
 								{att.kind === "image" && att.imageData && (
 									<img src={`data:${att.mimeType};base64,${att.imageData}`} alt={att.name} className="h-8 w-8 rounded object-cover" />
 								)}
-								{att.kind !== "image" && <span className="text-[10px]">📄</span>}
+								{att.kind !== "image" && (
+									<span className="flex items-center text-neutral-400">
+										<FileText size={10} strokeWidth={2} />
+									</span>
+								)}
 								<span className="max-w-[140px] truncate text-[10px] text-neutral-300">{att.name}</span>
 								<button
 									type="button"
 									onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
-									className="ml-0.5 text-neutral-500 hover:text-red-400"
+									className="ml-0.5 flex items-center text-neutral-500 hover:text-red-400"
 									title="Remove attachment"
+									aria-label={`Remove ${att.name}`}
 								>
-									×
+									<X size={11} strokeWidth={2} />
 								</button>
 							</span>
 						))}
@@ -355,7 +374,7 @@ export function Composer({
 								className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white transition-all hover:bg-blue-500 active:scale-95 disabled:opacity-40"
 								title="Send"
 							>
-								↑
+								<ArrowUp size={15} strokeWidth={2.25} />
 							</button>
 						</>
 					)}

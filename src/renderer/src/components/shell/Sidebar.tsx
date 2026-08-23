@@ -3,6 +3,7 @@
  * new-session split button, footer sheet triggers.
  */
 import { AnimatePresence, motion } from "motion/react";
+import { ChevronRight, ChevronUp, Package } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSessions } from "../../stores/pi-sessions";
 
@@ -256,7 +257,9 @@ export function Sidebar({
 					onClick={() => onOpenSheet("packages")}
 					className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-neutral-400 transition-standard hover:bg-neutral-900 hover:text-neutral-200"
 				>
-					<span className="text-sm">📦</span>
+					<span className="text-neutral-400">
+						<Package size={14} strokeWidth={1.75} />
+					</span>
 					<span>Packages</span>
 					{installedCount > 0 && (
 						<span className="ml-auto rounded-full bg-blue-950 px-1.5 text-[9px] font-medium text-blue-400">
@@ -292,8 +295,8 @@ export function Sidebar({
 									}
 									className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left hover:bg-neutral-900"
 								>
-									<span className="text-[9px] text-neutral-600">
-										{isCollapsed ? "▸" : "▾"}
+									<span className={`text-neutral-600 transition-transform ${isCollapsed ? "" : "rotate-90"}`}>
+										<ChevronRight size={10} strokeWidth={2} />
 									</span>
 									<span className="truncate text-[11px] font-medium text-neutral-400">
 										{project.split("/").pop() || project}
@@ -465,9 +468,9 @@ export function Sidebar({
 						{userName.length > 0 ? userName : "—"}
 					</span>
 					<span
-						className={`text-[9px] text-neutral-600 transition-transform ${profileMenuOpen ? "rotate-180" : ""}`}
+						className={`text-neutral-600 transition-transform ${profileMenuOpen ? "rotate-180" : ""}`}
 					>
-						▲
+						<ChevronUp size={12} strokeWidth={2} />
 					</span>
 				</button>
 

@@ -8,6 +8,7 @@
  * The list scrolls its own overflow; the popover never grows past ~40vh.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronUp, Search } from "lucide-react";
 import type { PiModelInfo } from "../../../../shared/pi";
 
 export function ModelPicker({
@@ -112,9 +113,11 @@ export function ModelPicker({
 				className="flex max-w-[180px] items-center gap-1 rounded-md bg-neutral-800 px-2 py-1 font-mono text-[10px] text-neutral-300 transition-colors hover:bg-neutral-700"
 			>
 				<span className="truncate">{label}</span>
-				<span className={`text-[8px] text-neutral-500 transition-transform ${open ? "rotate-180" : ""}`}>
-					▲
-				</span>
+				<ChevronUp
+					size={10}
+					strokeWidth={2}
+					className={`shrink-0 text-neutral-500 transition-transform ${open ? "rotate-180" : ""}`}
+				/>
 			</button>
 
 			{open && (
@@ -131,18 +134,25 @@ export function ModelPicker({
 						className="absolute bottom-full left-0 z-50 mb-2 w-[340px] overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 shadow-2xl shadow-black/60"
 					>
 						<div className="border-b border-neutral-800 p-2">
-							<input
-								ref={inputRef}
-								value={query}
-								onChange={(e) => {
-									setQuery(e.target.value);
-									setCursor(0);
-								}}
-								onKeyDown={onKeyDown}
-								placeholder={`Search ${String(models.length)} models…`}
-								spellCheck={false}
-								className="w-full rounded-md bg-neutral-800 px-2.5 py-1.5 text-xs text-neutral-200 outline-none placeholder:text-neutral-500 focus:ring-1 focus:ring-blue-600"
-							/>
+							<div className="relative">
+								<Search
+									size={12}
+									strokeWidth={2}
+									className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500"
+								/>
+								<input
+									ref={inputRef}
+									value={query}
+									onChange={(e) => {
+										setQuery(e.target.value);
+										setCursor(0);
+									}}
+									onKeyDown={onKeyDown}
+									placeholder={`Search ${String(models.length)} models…`}
+									spellCheck={false}
+									className="w-full rounded-md bg-neutral-800 py-1.5 pl-8 pr-2.5 text-xs text-neutral-200 outline-none placeholder:text-neutral-500 focus:ring-1 focus:ring-blue-600"
+								/>
+							</div>
 						</div>
 						<div ref={listRef} className="max-h-[40vh] overflow-y-auto py-1">
 							{flat.length === 0 && (
@@ -180,7 +190,9 @@ export function ModelPicker({
 												<span className="font-mono text-[9px] text-neutral-500">
 													{Math.round(m.contextWindow / 1000)}k
 												</span>
-												{active && <span className="text-[9px]">✓</span>}
+												{active && (
+												<Check size={11} strokeWidth={2.5} className="shrink-0 text-blue-400" />
+											)}
 											</button>
 										);
 									})}

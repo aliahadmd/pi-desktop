@@ -5,6 +5,15 @@
 import { useEffect, useState } from "react";
 import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
+import {
+	FolderOpen,
+	Network,
+	Plus,
+	SquareSlash,
+	SquareTerminal,
+	Search,
+	X,
+} from "lucide-react";
 import type { PiImageInput, PiModelInfo, PiThinkingLevel } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
 import { nextActiveTerminalTab } from "../lib/terminal-tabs";
@@ -260,8 +269,9 @@ export default function ChatPage({
 									if (e.key === "Enter") closeTab(s.id);
 								}}
 								className="ml-1 text-neutral-600 hover:text-neutral-300"
+								aria-label={`Close ${s.id.slice(0, 8)}`}
 							>
-								×
+								<X size={12} strokeWidth={2} />
 							</span>
 						</button>
 					))}
@@ -303,27 +313,27 @@ export default function ChatPage({
 						</div>
 
 						{/* Icon rail (ch22) */}
-						<div className="flex w-10 shrink-0 flex-col items-center gap-0.5 border-l border-neutral-800 py-2">
+							<div className="flex w-10 shrink-0 flex-col items-center gap-0.5 border-l border-neutral-800 py-2">
 								{([
-									{ tab: "files" as const, label: "📁", title: "Files" },
-									{ tab: "review" as const, label: "🔍", title: `Review (${reviewCount})` },
-									{ tab: "commands" as const, label: "⌘", title: "Commands" },
-									{ tab: "tree" as const, label: "🌳", title: "Tree" },
-									{ tab: "terminal" as const, label: "▤", title: "Terminal" },
-								]).map(({ tab, label, title }) => (
+									{ tab: "files" as const, Icon: FolderOpen, title: "Files" },
+									{ tab: "review" as const, Icon: Search, title: `Review (${reviewCount})` },
+									{ tab: "commands" as const, Icon: SquareSlash, title: "Commands" },
+									{ tab: "tree" as const, Icon: Network, title: "Tree" },
+									{ tab: "terminal" as const, Icon: SquareTerminal, title: "Terminal" },
+								]).map(({ tab, Icon, title }) => (
 									<button
 										key={tab}
 										type="button"
 										data-testid={`rail-${tab}`}
 										onClick={() => setDockTab(dockTab === tab ? null : tab)}
 										title={title}
-										className={`relative flex h-8 w-8 items-center justify-center rounded text-sm transition-standard ${
+										className={`relative flex h-8 w-8 items-center justify-center rounded transition-standard ${
 											dockTab === tab
 												? "bg-neutral-800 text-blue-400"
 												: "text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
 										}`}
 									>
-										{label}
+										<Icon size={16} strokeWidth={1.75} />
 										{tab === "review" && reviewCount > 0 && (
 											<span className="absolute -right-0.5 -top-0.5 rounded-full bg-red-600 px-1 text-[8px] leading-tight text-white">
 												{reviewCount}
@@ -361,8 +371,9 @@ export default function ChatPage({
 										type="button"
 										onClick={() => setDockTab(null)}
 										className="ml-auto px-1.5 text-neutral-600 hover:text-neutral-300"
+										aria-label="Close panel"
 									>
-										×
+										<X size={12} strokeWidth={2} />
 									</button>
 								</div>
 								<div className="min-h-0 flex-1 overflow-y-auto">
@@ -412,11 +423,11 @@ export default function ChatPage({
 													setActiveTermTab(terminalTabs.length);
 													setNextTermNum(num + 1);
 												}}
-												className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-												title="New terminal"
-											>
-												+
-											</button>
+												className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+													title="New terminal"
+												>
+													<Plus size={12} strokeWidth={2} />
+												</button>
 										</div>
 										<div className="min-h-0 flex-1">
 											{terminalTabs.map((tab, i) => (
