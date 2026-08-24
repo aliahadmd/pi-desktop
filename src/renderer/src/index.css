@@ -34,6 +34,35 @@
 	--color-warning: var(--pi-warning);
 }
 
+/* Palette remap (phase 7): components use the neutral/blue ramps
+   SEMANTICALLY (950=app background, 800=surface, 500=muted text,
+   100=bright text; blue=accent, red=danger, green=success). Pointing the
+   ramp at theme tokens themes every existing class in one place — no
+   per-component edits, and ordering preserves intra-scale contrast. */
+@theme inline {
+	--color-neutral-950: var(--pi-bg);
+	--color-neutral-900: var(--pi-surface);
+	--color-neutral-850: var(--pi-surface);
+	--color-neutral-800: var(--pi-surface-2);
+	--color-neutral-700: var(--pi-border);
+	--color-neutral-600: var(--pi-faint);
+	--color-neutral-500: var(--pi-muted);
+	--color-neutral-400: var(--pi-muted);
+	--color-neutral-300: var(--pi-muted);
+	--color-neutral-200: var(--pi-text);
+	--color-neutral-100: var(--pi-text);
+	--color-blue-300: var(--pi-accent);
+	--color-blue-400: var(--pi-accent);
+	--color-blue-500: var(--pi-accent);
+	--color-blue-600: var(--pi-accent);
+	--color-red-500: var(--pi-danger);
+	--color-red-600: var(--pi-danger);
+	--color-green-600: var(--pi-success);
+	--color-emerald-500: var(--pi-success);
+	--color-yellow-500: var(--pi-warning);
+	--color-amber-500: var(--pi-warning);
+}
+
 html,
 body,
 #root {
