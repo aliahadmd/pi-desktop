@@ -33,6 +33,8 @@ export interface SessionUi {
 	id: string;
 	backend: "sdk" | "rpc";
 	cwd: string;
+	/** User-set or pi-derived session title; undefined until state refresh. */
+	sessionName?: string;
 	ctx: IngestContext;
 	blocks: Block[];
 	phase: "idle" | "streaming" | "compacting" | "retrying";
@@ -340,6 +342,9 @@ export const useSessions = create<PiSessionsState>((set, get) => {
 						[sessionId]: {
 							...s,
 							...(state.model !== undefined ? { model: state.model } : {}),
+							...(state.sessionName !== undefined
+								? { sessionName: state.sessionName }
+								: {}),
 							thinkingLevel: state.thinkingLevel,
 						},
 					},

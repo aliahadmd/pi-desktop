@@ -285,7 +285,11 @@ export default function ChatPage({
 											: "bg-blue-500 animate-pulse"
 								}`}
 							/>
-							{s.cwd.split("/").pop() ?? s.cwd}
+							{/* Tab label: the session's own title when pi has derived
+						    one, else the first message snippet, else the project
+						    folder — so two sessions in one project stay
+						    distinguishable. */}
+						{s.sessionName ?? s.cwd.split("/").filter(Boolean).pop() ?? s.cwd}
 							<span
 								role="button"
 								tabIndex={0}
