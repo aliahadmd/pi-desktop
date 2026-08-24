@@ -108,6 +108,35 @@ html[data-transparency="on"] body {
 .transition-standard {
 	transition: all var(--dur-med) var(--ease-standard);
 }
+
+/* Streaming shimmer (phase 7, ch33): animated accent sweep across session
+   titles whose phase is streaming. Reduced-motion users get static text. */
+@keyframes pi-shimmer {
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
+}
+.pi-streaming-title {
+	background: linear-gradient(
+		90deg,
+		var(--pi-text) 40%,
+		var(--pi-accent) 50%,
+		var(--pi-text) 60%
+	);
+	background-size: 200% 100%;
+	animation: pi-shimmer 1.6s linear infinite;
+	-webkit-background-clip: text;
+	color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+	.pi-streaming-title {
+		animation: none;
+		color: var(--pi-accent);
+	}
+}
 .skeleton {
 	background: linear-gradient(
 		90deg,

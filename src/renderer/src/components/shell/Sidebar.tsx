@@ -516,34 +516,39 @@ export function Sidebar({
 															setMenuFor(menuFor === s.id ? null : s.id);
 														}}
 														className={`group mx-1 cursor-pointer rounded px-2 py-1.5 ${
-															isActive ? "bg-neutral-800/80" : "hover:bg-neutral-900"
+															isActive
+																? "bg-app-accent/10 ring-1 ring-inset ring-app-accent/30"
+																: "hover:bg-app-surface"
 														}`}
-													>
+														>
 														<div className="flex items-center gap-1.5">
 															<span
 																className={`h-1.5 w-1.5 shrink-0 rounded-full ${
 																	dot === "dead"
-																		? "bg-red-500"
+																		? "bg-danger"
 																		: dot === "streaming"
-																			? "bg-blue-500 animate-pulse"
+																			? "bg-accent animate-pulse"
 																			: dot === "idle"
-																				? "bg-green-600"
+																				? "bg-success"
 																				: "bg-transparent"
 																}`}
 															/>
-															<span className="min-w-0 flex-1 truncate text-xs text-neutral-300">
+															<span
+																className={`min-w-0 flex-1 truncate text-xs text-app-text ${
+																	dot === "streaming" ? "pi-streaming-title" : ""
+																}`}
+															>
 																{s.name ?? s.firstMessage ?? s.filePath.split("/").pop()}
 															</span>
-															<span className="shrink-0 font-mono text-[9px] text-neutral-600">
+															<span className="shrink-0 font-mono text-[9px] text-app-faint">
 																{relTime(s.updatedAt)}
 															</span>
 														</div>
-														{s.costUsd > 0 && (
-															<div className="ml-3 font-mono text-[9px] text-neutral-700">
-																${s.costUsd.toFixed(4)}
-															</div>
-														)}
-													</div>
+														<div className="ml-3 mt-0.5 flex items-center gap-2 font-mono text-[9px] text-app-faint">
+															{s.messageCount > 0 && <span>{String(s.messageCount)} msgs</span>}
+															{s.costUsd > 0 && <span>${s.costUsd.toFixed(4)}</span>}
+														</div>
+														</div>
 												);
 											})}
 										</motion.div>
