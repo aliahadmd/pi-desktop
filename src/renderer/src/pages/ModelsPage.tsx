@@ -193,7 +193,7 @@ export function ModelsPage({
 										type="button"
 										disabled={busy || (keyDraft[selectedProvider]?.trim().length ?? 0) === 0}
 										onClick={() => void saveKey(selectedProvider)}
-										className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+										className="rounded bg-blue-600 px-3 py-1.5 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
 									>
 										Save key
 									</button>
@@ -317,7 +317,7 @@ export function ModelsPage({
 														})
 														.finally(() => setJsonSaving(false));
 												}}
-												className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+												className="rounded bg-blue-600 px-3 py-1.5 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
 											>
 												Save models.json
 											</button>
@@ -367,7 +367,7 @@ export function ModelsPage({
 															type="button"
 															data-testid={`use-in-session-${m.id}`}
 															onClick={() => onUseInSession(m.provider, m.id)}
-															className="mr-1 rounded bg-blue-700 px-2 py-0.5 text-[10px] text-white hover:bg-blue-600"
+															className="mr-1 rounded bg-blue-700 px-2 py-0.5 text-[10px] text-on-accent hover:bg-blue-600"
 															title="Apply to the open session now"
 														>
 															Use in session

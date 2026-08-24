@@ -126,7 +126,7 @@ export function Onboarding({
 						disabled={busy || selected === null}
 						onClick={() => void finish()}
 						data-testid="onboard-finish"
-						className="rounded bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+						className="rounded bg-blue-600 px-4 py-2 text-xs font-medium text-on-accent hover:bg-blue-500 disabled:opacity-40"
 					>
 						{busy ? "Working…" : "Get started"}
 					</button>

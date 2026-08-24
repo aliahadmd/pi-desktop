@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { langFor } from "../../src/renderer/src/lib/highlight";
+import { THEME_PRESETS } from "../../src/shared/theme";
+import { isSupportedShikiTheme } from "../../src/renderer/src/lib/highlight";
 
 describe("langFor (phase 7 code highlighting)", () => {
 	it("maps common file extensions", () => {
@@ -25,5 +27,11 @@ describe("langFor (phase 7 code highlighting)", () => {
 
 	it("handles full paths by using the final extension", () => {
 		expect(langFor("/Users/ahs/project/src/main.rs")).toBe("rust");
+	});
+
+	it("every preset maps to a loaded shiki theme (highlighting never silently falls back)", () => {
+		for (const p of THEME_PRESETS) {
+			expect(isSupportedShikiTheme(p.shiki), `${p.id} -> ${p.shiki}`).toBe(true);
+		}
 	});
 });

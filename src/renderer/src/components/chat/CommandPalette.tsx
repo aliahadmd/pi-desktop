@@ -479,7 +479,7 @@ export function CommandPalette({
 										className={`flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs ${
 											i === clampedSelected
 												? "bg-accent-soft text-on-accent-soft"
-												: "text-neutral-300 hover:bg-neutral-800/60"
+												: "text-neutral-300 hover:bg-app-surface2"
 										}`}
 									>
 										<span className="truncate">{item.label}</span>

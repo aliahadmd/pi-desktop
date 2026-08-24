@@ -333,7 +333,7 @@ export default function ChatPage({
 							type="button"
 							disabled={creating}
 							onClick={() => void newSession("sdk")}
-							className="rounded bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+							className="rounded bg-blue-600 px-4 py-2 text-xs font-medium text-on-accent hover:bg-blue-500 disabled:opacity-40"
 						>
 							New SDK session…
 						</button>

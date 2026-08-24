@@ -341,7 +341,7 @@ export function Sidebar({
 						type="button"
 						data-testid="sidebar-new-sdk"
 						onClick={() => void create("sdk")}
-						className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+						className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-blue-500"
 					>
 						+ New session
 					</button>

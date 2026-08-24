@@ -230,7 +230,7 @@ export function Composer({
 			{/* Git context strip */}
 			{git !== null && git.repo && (
 				<div
-					className="mb-1.5 flex items-center gap-2 rounded-t-lg border border-b-0 border-neutral-800 bg-neutral-900/60 px-4 py-1.5 font-mono text-[10px] text-neutral-400"
+					className="mb-1.5 flex items-center gap-2 rounded-t-lg border border-b-0 border-neutral-800 bg-app-surface/60 px-4 py-1.5 font-mono text-[10px] text-neutral-400"
 					data-testid="git-strip"
 				>
 					<span className="flex items-center gap-1">
@@ -284,10 +284,10 @@ export function Composer({
 			<div
 				className={`rounded-xl border transition-colors focus-within:border-blue-600/70 ${
 					permissionMode === "plan"
-						? "border-accent-line/60 bg-neutral-900/80"
+						? "border-accent-line/60 bg-app-surface/80"
 						: permissionMode === "bypass"
-							? "border-amber-900/60 bg-neutral-900/80 focus-within:border-amber-600/70"
-							: "border-neutral-700/80 bg-neutral-900/80 focus-within:border-blue-600/70"
+							? "border-amber-900/60 bg-app-surface/80 focus-within:border-amber-600/70"
+							: "border-neutral-700/80 bg-app-surface/80 focus-within:border-blue-600/70"
 				}`}
 			>
 				<textarea
@@ -427,7 +427,7 @@ export function Composer({
 								data-testid="send-button"
 								disabled={text.trim().length === 0 && attachments.length === 0}
 								onClick={submit}
-								className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white transition-all hover:bg-blue-500 active:scale-95 disabled:opacity-40"
+								className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-on-accent transition-all hover:bg-blue-500 active:scale-95 disabled:opacity-40"
 								title="Send"
 							>
 								<ArrowUp size={15} strokeWidth={2.25} />

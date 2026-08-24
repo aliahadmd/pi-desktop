@@ -97,7 +97,7 @@ export function PackagesPanel(): React.JSX.Element {
 							type="button"
 							disabled={busy}
 							onClick={() => void confirmInstall()}
-							className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+							className="rounded bg-blue-600 px-3 py-1 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
 						>
 							Trust & install
 						</button>
@@ -122,7 +122,7 @@ export function PackagesPanel(): React.JSX.Element {
 						type="button"
 						disabled={busy || source.trim().length === 0}
 						onClick={() => void beginInstall()}
-						className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+						className="rounded bg-blue-600 px-3 py-1.5 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
 					>
 						Install…
 					</button>

@@ -95,7 +95,7 @@ export default function PiConsole(): React.JSX.Element {
 					type="button"
 					disabled={busy}
 					onClick={() => void pickAndCreate("sdk")}
-					className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+					className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-blue-500 disabled:opacity-50"
 				>
 					New SDK session…
 				</button>
@@ -144,7 +144,7 @@ export default function PiConsole(): React.JSX.Element {
 			<div
 				ref={logRef}
 				data-testid="event-log"
-				className="flex-1 overflow-y-auto rounded border border-neutral-800 bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-neutral-300"
+				className="flex-1 overflow-y-auto rounded border border-app-border bg-app-bg p-3 font-mono text-[11px] leading-relaxed text-app-muted"
 			>
 				{log.length === 0 ? (
 					<span className="text-neutral-500">

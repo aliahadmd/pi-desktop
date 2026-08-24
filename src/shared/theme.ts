@@ -182,7 +182,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 			warning: "#d29922",
 			userBubble: "rgba(33, 38, 45, 0.85)",
 		},
-		shiki: "github-dark-default",
+		shiki: "github-dark",
 	},
 ];
 

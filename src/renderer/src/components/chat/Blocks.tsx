@@ -95,7 +95,7 @@ const ToolBlockView = memo(function ToolBlockView({
 		(block.id === "rpc-bash" || block.id.startsWith("bash-"));
 	return (
 		<div className="px-4 py-1" data-kind="tool" data-tool={block.toolName}>
-			<div className="flex items-center rounded-lg border border-neutral-800 bg-neutral-900/60">
+			<div className="flex items-center rounded-lg border border-neutral-800 bg-app-surface/60">
 				<button
 					type="button"
 					onClick={() => toggleExpanded(key, fallback)}
@@ -294,7 +294,7 @@ const NoticeBlockView = memo(function NoticeBlockView({
 			? "text-danger border-danger/40 bg-danger-soft"
 			: block.level === "warn"
 				? "text-amber-400 border-amber-900 bg-amber-950/40"
-				: "text-neutral-400 border-neutral-800 bg-neutral-900/40";
+				: "text-neutral-400 border-neutral-800 bg-app-surface/40";
 	return (
 		<div className="px-4 py-1">
 			<div className={`flex items-center gap-2 rounded border px-3 py-1.5 text-xs ${cls}`}>
@@ -335,7 +335,7 @@ const ToolGroupView = function ToolGroupView({
 			<button
 				type="button"
 				onClick={() => toggleExpanded(key, fallback)}
-				className="flex w-full items-center gap-2 px-4 py-1 text-left text-xs text-neutral-400 hover:bg-neutral-900/50"
+				className="flex w-full items-center gap-2 px-4 py-1 text-left text-xs text-neutral-400 hover:bg-app-surface/50"
 			>
 				<span className={`flex shrink-0 items-center ${running ? "text-accent-strong" : errored ? "text-danger" : "text-green-500"}`}>
 					{running ? (

@@ -57,7 +57,7 @@ function ExplorerRow({
 }): React.JSX.Element {
 	return (
 		<div
-			className={`group flex items-center hover:bg-neutral-800/60 ${
+			className={`group flex items-center hover:bg-app-surface2 ${
 				entry.type === "dir" ? "" : "text-neutral-400"
 			}`}
 			style={{ paddingLeft: `${depth * 12 + 12}px` }}
@@ -340,7 +340,7 @@ export function SessionTreePanel({
 					key={node.entry.id}
 					type="button"
 					onClick={() => setSelected(node.entry.id)}
-					className={`block w-full truncate rounded px-2 py-0.5 text-left text-[11px] hover:bg-neutral-800/60 ${
+					className={`block w-full truncate rounded px-2 py-0.5 text-left text-[11px] hover:bg-app-surface2 ${
 						isSelected ? "bg-accent-soft text-on-accent-soft" : "text-neutral-300"
 					}`}
 					style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -392,7 +392,7 @@ export function SessionTreePanel({
 								setSelected(null);
 								setInstructions("");
 							}}
-							className="rounded bg-blue-700 px-2.5 py-1 text-[10px] text-white hover:bg-blue-600"
+							className="rounded bg-blue-700 px-2.5 py-1 text-[10px] text-on-accent hover:bg-blue-600"
 						>
 							Navigate here
 						</button>
@@ -564,7 +564,7 @@ export function CommandsBrowser({
 						<button
 							type="button"
 							onClick={insertWithArgs}
-							className="w-full rounded bg-blue-700 px-3 py-1.5 text-xs text-white hover:bg-blue-600"
+							className="w-full rounded bg-blue-700 px-3 py-1.5 text-xs text-on-accent hover:bg-blue-600"
 						>
 							Insert /{detail.command.name}
 						</button>
@@ -583,7 +583,7 @@ export function CommandsBrowser({
 									type="button"
 									onClick={() => inspect(c)}
 									title={c.path ?? `Insert /${c.name}`}
-									className="block w-full rounded px-2 py-1 text-left hover:bg-neutral-800/60"
+									className="block w-full rounded px-2 py-1 text-left hover:bg-app-surface2"
 								>
 									<span className="font-mono text-xs text-neutral-200">/{c.name}</span>
 									{c.description !== undefined && (

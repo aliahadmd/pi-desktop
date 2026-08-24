@@ -38,6 +38,7 @@
 	--color-on-accent-soft: var(--pi-text);
 	--color-accent-strong: var(--pi-accent-strong);
 	--color-accent-line: var(--pi-accent-line);
+	--color-on-accent: #ffffff;
 	--color-success: var(--pi-success);
 	--color-success-soft: var(--pi-success-soft);
 	--color-danger: var(--pi-danger);

@@ -174,7 +174,7 @@ export function PackageMarketplace(): React.JSX.Element {
 									return (
 										<div
 											key={pkg.name}
-											className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3"
+											className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-app-surface/50 px-4 py-3"
 										>
 											<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-sm font-bold text-accent-strong">
 												{pkg.name.replace(/[^a-zA-Z]/g, "").slice(0, 1).toUpperCase()}
@@ -203,7 +203,7 @@ export function PackageMarketplace(): React.JSX.Element {
 													type="button"
 													disabled={installing === pkg.name}
 													onClick={() => void install(pkg.name)}
-													className="shrink-0 rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+													className="shrink-0 rounded bg-blue-600 px-3 py-1 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
 												>
 													{installing === pkg.name ? "…" : "Install"}
 												</button>

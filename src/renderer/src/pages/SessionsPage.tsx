@@ -213,7 +213,7 @@ export function SessionsPage({
 
 				{/* FTS hits (sidecar) */}
 				{hits !== null && hits.length > 0 && (
-					<div className="border-b border-neutral-800 bg-neutral-900/40">
+					<div className="border-b border-neutral-800 bg-app-surface/40">
 						<div className="px-4 pt-2 text-[10px] tracking-wide text-neutral-500 uppercase">
 							Message matches
 						</div>
@@ -258,7 +258,7 @@ export function SessionsPage({
 						sessions.map((s) => (
 							<div
 								key={s.id}
-								className="flex items-center gap-3 border-b border-neutral-800/60 px-4 py-2.5 hover:bg-neutral-900/50"
+								className="flex items-center gap-3 border-b border-neutral-800/60 px-4 py-2.5 hover:bg-app-surface/50"
 							>
 								<div className="min-w-0 flex-1">
 									<div className="flex items-center gap-2">
@@ -284,7 +284,7 @@ export function SessionsPage({
 									type="button"
 									disabled={busy}
 									onClick={() => void resume(s)}
-									className="rounded bg-blue-700 px-2.5 py-1 text-[10px] text-white hover:bg-blue-600 disabled:opacity-40"
+									className="rounded bg-blue-700 px-2.5 py-1 text-[10px] text-on-accent hover:bg-blue-600 disabled:opacity-40"
 								>
 									Resume
 								</button>
@@ -307,7 +307,7 @@ export function SessionsPage({
 				<h3 className="mb-3 text-xs font-semibold tracking-wide text-neutral-400 uppercase">
 					Usage (14 days)
 				</h3>
-				<div className="mb-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
+				<div className="mb-4 rounded-lg border border-neutral-800 bg-app-surface/50 p-3">
 					<div className="text-lg font-semibold text-neutral-100">
 						${totals.totalCost.toFixed(4)}
 					</div>

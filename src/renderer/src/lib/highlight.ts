@@ -16,6 +16,11 @@ export const SHIKI_THEMES = [
 	"solarized-light",
 ] as const;
 
+/** Every preset's shiki field must name a loaded theme (unit-tested). */
+export function isSupportedShikiTheme(theme: string): boolean {
+	return (SHIKI_THEMES as readonly string[]).includes(theme);
+}
+
 /** Grammars preloaded at highlighter creation. */
 const BASE_LANGS = [
 	"typescript",

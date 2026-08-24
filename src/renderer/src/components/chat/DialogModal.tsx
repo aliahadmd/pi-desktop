@@ -36,7 +36,7 @@ export function DialogModal({
 								type="button"
 								onClick={() => answer({ confirmed: true })}
 								data-testid="dialog-confirm"
-								className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500"
+								className="rounded bg-blue-600 px-3 py-1.5 text-xs text-on-accent hover:bg-blue-500"
 							>
 								Allow
 							</button>
@@ -87,7 +87,7 @@ export function DialogModal({
 							<button
 								type="button"
 								onClick={() => answer({ value })}
-								className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500"
+								className="rounded bg-blue-600 px-3 py-1.5 text-xs text-on-accent hover:bg-blue-500"
 							>
 								OK
 							</button>
