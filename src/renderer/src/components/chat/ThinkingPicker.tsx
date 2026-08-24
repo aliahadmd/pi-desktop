@@ -73,7 +73,7 @@ export function ThinkingPicker({
 								onPick(l);
 							}}
 							className={`block w-full px-4 py-1.5 text-left text-xs hover:bg-neutral-800 ${
-								level === l ? "text-blue-400" : "text-neutral-300"
+								level === l ? "text-accent-strong" : "text-neutral-300"
 							}`}
 						>
 							{l}

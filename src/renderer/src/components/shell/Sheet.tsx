@@ -45,7 +45,7 @@ export function Sheet({
 				<motion.div
 					/* fixed, not absolute: the sheet is a full-window surface and must not
 					   depend on the App root staying unpositioned. */
-					className="fixed inset-0 z-40 flex flex-col bg-[#141416]"
+					className="fixed inset-0 z-40 flex flex-col bg-app-bg"
 					data-testid={testId}
 					initial={{ opacity: 0, y: 12 }}
 					animate={{ opacity: 1, y: 0 }}

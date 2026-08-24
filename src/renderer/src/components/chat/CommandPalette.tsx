@@ -478,7 +478,7 @@ export function CommandPalette({
 										onClick={() => item.run()}
 										className={`flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs ${
 											i === clampedSelected
-												? "bg-blue-950/70 text-blue-100"
+												? "bg-accent-soft text-on-accent-soft"
 												: "text-neutral-300 hover:bg-neutral-800/60"
 										}`}
 									>

@@ -49,7 +49,7 @@ export function TopBar({
 
 	return (
 		<div
-			className="flex h-10 shrink-0 items-center border-b border-neutral-800 bg-neutral-950/80"
+			className="flex h-10 shrink-0 items-center border-b border-neutral-800 bg-app-bg/80"
 			data-testid="top-bar"
 		>
 			{/* Sidebar toggle: FIXED left position. macOS puts the traffic
@@ -62,7 +62,7 @@ export function TopBar({
 				aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
 				onClick={onToggleSidebar}
 				className={`ml-[84px] rounded p-1.5 transition-colors hover:bg-neutral-800 ${
-					sidebarHidden ? "text-blue-400" : "text-neutral-400 hover:text-neutral-200"
+					sidebarHidden ? "text-accent-strong" : "text-neutral-400 hover:text-neutral-200"
 				}`}
 			>
 				<PanelLeft size={15} strokeWidth={2} />
@@ -83,7 +83,7 @@ export function TopBar({
 							title={title}
 							className={`relative rounded p-1.5 transition-colors ${
 								dockTab === tab
-									? "bg-neutral-800 text-blue-400"
+									? "bg-neutral-800 text-accent-strong"
 									: "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
 							}`}
 						>

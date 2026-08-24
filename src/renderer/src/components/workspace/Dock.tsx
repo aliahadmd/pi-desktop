@@ -203,10 +203,10 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 			<div className="truncate border-b border-neutral-800 px-3 py-2 font-mono text-[10px] text-neutral-500">
 				{cwd}
 			</div>
-			{error !== null && <div className="px-3 py-2 text-[10px] text-red-400">{error}</div>}
+			{error !== null && <div className="px-3 py-2 text-[10px] text-danger">{error}</div>}
 			<div className="flex-1 overflow-y-auto py-1">{renderDir(cwd, 0)}</div>
 			{fileContent !== null && (
-				<div className="h-1/2 overflow-auto border-t border-neutral-800 bg-neutral-950 p-3">
+				<div className="h-1/2 overflow-auto border-t border-neutral-800 bg-app-bg p-3">
 					<div className="mb-1 flex items-center justify-between">
 						<span className="font-mono text-[10px] text-neutral-500">{fileContent.path}</span>
 						<button
@@ -304,7 +304,7 @@ export function SessionTreePanel({
 					type="button"
 					onClick={() => setSelected(node.entry.id)}
 					className={`block w-full truncate rounded px-2 py-0.5 text-left text-[11px] hover:bg-neutral-800/60 ${
-						isSelected ? "bg-blue-950/60 text-blue-200" : "text-neutral-300"
+						isSelected ? "bg-accent-soft text-on-accent-soft" : "text-neutral-300"
 					}`}
 					style={{ paddingLeft: `${depth * 12 + 8}px` }}
 					title={node.entry.id}
@@ -320,7 +320,7 @@ export function SessionTreePanel({
 
 	return (
 		<div className="flex h-full flex-col">
-			{error !== null && <div className="px-3 py-2 text-[10px] text-red-400">{error}</div>}
+			{error !== null && <div className="px-3 py-2 text-[10px] text-danger">{error}</div>}
 			<div className="flex-1 overflow-y-auto p-2">
 				{tree === null ? (
 					<p className="p-2 text-xs text-neutral-600">Loading tree…</p>
@@ -521,7 +521,7 @@ export function CommandsBrowser({
 								))}
 							</div>
 						)}
-						<div className="my-2 max-h-64 overflow-y-auto rounded bg-neutral-950 p-2 text-[11px] text-neutral-300 [&_p]:mb-1.5">
+						<div className="my-2 max-h-64 overflow-y-auto rounded bg-app-bg p-2 text-[11px] text-neutral-300 [&_p]:mb-1.5">
 							<Markdown text={detail.content.slice(0, 8_000)} />
 						</div>
 						<button
@@ -588,7 +588,7 @@ export function ReviewQueue({ blocks }: { blocks: Block[] }): React.JSX.Element 
 					<div key={b.id} className="mb-2 rounded border border-neutral-800">
 						<div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-1.5">
 							<span
-									className={`flex shrink-0 items-center ${b.status === "error" ? "text-red-400" : "text-green-500"}`}
+									className={`flex shrink-0 items-center ${b.status === "error" ? "text-danger" : "text-green-500"}`}
 								>
 									{b.status === "error" ? (
 										<X size={11} strokeWidth={2.25} />

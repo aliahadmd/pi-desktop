@@ -115,12 +115,12 @@ export function PackageMarketplace(): React.JSX.Element {
 				</p>
 
 				{error !== null && (
-					<div className="mt-3 rounded border border-red-900 bg-red-950/50 px-3 py-2 text-xs text-red-300">
+					<div className="mt-3 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">
 						{error}
 					</div>
 				)}
 				{message !== null && (
-					<div className="mt-3 rounded border border-green-900 bg-green-950/50 px-3 py-2 text-xs text-green-300">
+					<div className="mt-3 rounded border border-success/40 bg-success-soft px-3 py-2 text-xs text-success">
 						{message}
 					</div>
 				)}
@@ -148,7 +148,7 @@ export function PackageMarketplace(): React.JSX.Element {
 									type="button"
 									onClick={() => void remove(p.source)}
 									title="Click to remove"
-									className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:border-red-800 hover:text-red-400"
+									className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:border-red-800 hover:text-danger"
 								>
 									{p.source.replace("npm:", "")}
 								</button>
@@ -176,7 +176,7 @@ export function PackageMarketplace(): React.JSX.Element {
 											key={pkg.name}
 											className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3"
 										>
-											<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-sm font-bold text-blue-400">
+											<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-sm font-bold text-accent-strong">
 												{pkg.name.replace(/[^a-zA-Z]/g, "").slice(0, 1).toUpperCase()}
 											</span>
 											<div className="min-w-0 flex-1">
@@ -194,7 +194,7 @@ export function PackageMarketplace(): React.JSX.Element {
 													type="button"
 													disabled={installing === pkg.name}
 													onClick={() => void remove(pkg.name)}
-													className="shrink-0 rounded bg-neutral-800 px-3 py-1 text-xs text-neutral-400 hover:bg-red-950 hover:text-red-400 disabled:opacity-40"
+													className="shrink-0 rounded bg-neutral-800 px-3 py-1 text-xs text-neutral-400 hover:bg-danger-soft hover:text-danger disabled:opacity-40"
 												>
 													Remove
 												</button>

@@ -151,12 +151,12 @@ export function ModelsPage({
 			{/* Detail */}
 			<div className="flex-1 overflow-y-auto p-4">
 				{error !== null && (
-					<div className="mb-3 rounded border border-red-900 bg-red-950/50 px-3 py-2 text-xs text-red-300">
+					<div className="mb-3 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">
 						{error}
 					</div>
 				)}
 				{notice !== null && (
-					<div className="mb-3 rounded border border-green-900 bg-green-950/50 px-3 py-2 text-xs text-green-300">
+					<div className="mb-3 rounded border border-success/40 bg-success-soft px-3 py-2 text-xs text-success">
 						{notice}
 					</div>
 				)}
@@ -291,7 +291,7 @@ export function ModelsPage({
 											onChange={(e) => setModelsJson(e.target.value)}
 											rows={16}
 											spellCheck={false}
-											className="w-full rounded border border-neutral-700 bg-neutral-950 p-3 font-mono text-[11px] outline-none focus:border-blue-500"
+											className="w-full rounded border border-neutral-700 bg-app-bg p-3 font-mono text-[11px] outline-none focus:border-blue-500"
 										/>
 										<div className="mt-2 flex items-center gap-2">
 											<button

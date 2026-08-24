@@ -74,7 +74,7 @@ export function Onboarding({
 				</p>
 
 				{error !== null && (
-					<div className="mt-3 rounded border border-red-900 bg-red-950/50 px-3 py-2 text-xs text-red-300">
+					<div className="mt-3 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">
 						{error}
 					</div>
 				)}
@@ -89,7 +89,7 @@ export function Onboarding({
 							type="button"
 							onClick={() => setSelected(p.id)}
 							className={`flex items-center gap-2 rounded px-3 py-2 text-left ${
-								selected === p.id ? "bg-blue-950/60 ring-1 ring-blue-700" : "hover:bg-neutral-800"
+								selected === p.id ? "bg-accent-soft ring-1 ring-accent-line" : "hover:bg-neutral-800"
 							}`}
 						>
 							<span
@@ -109,7 +109,7 @@ export function Onboarding({
 						value={key}
 						onChange={(e) => setKey(e.target.value)}
 						placeholder="Paste API key…"
-						className="mt-4 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+						className="mt-4 w-full rounded border border-neutral-700 bg-app-bg px-3 py-2 text-sm outline-none focus:border-blue-500"
 					/>
 				)}
 

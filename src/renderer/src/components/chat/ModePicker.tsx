@@ -77,7 +77,7 @@ export function ModePicker({
 					mode === "bypass"
 						? "bg-amber-950/60 text-amber-400 hover:bg-amber-950"
 						: mode === "plan"
-							? "bg-blue-950/60 text-blue-300 hover:bg-blue-950"
+							? "bg-accent-soft text-accent-strong hover:bg-accent-soft"
 							: "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
 				}`}
 			>
@@ -105,7 +105,7 @@ export function ModePicker({
 									onPick(m);
 								}}
 								className={`flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-neutral-800 ${
-									active ? "text-blue-400" : "text-neutral-300"
+									active ? "text-accent-strong" : "text-neutral-300"
 								}`}
 							>
 								<Icon size={13} strokeWidth={2} className="mt-0.5 shrink-0" />

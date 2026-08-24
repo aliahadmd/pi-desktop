@@ -1,10 +1,18 @@
 /**
  * Embedded terminal: xterm.js over node-pty, scoped to the session cwd.
+ * Terminal colors follow the app theme via the --pi-* CSS variables
+ * (getComputedStyle read at mount; remount on theme change re-syncs).
  */
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+
+/** Read a --pi-* custom property from the document root. */
+function piVar(name: string, fallback: string): string {
+	const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+	return v.length > 0 ? v : fallback;
+}
 
 export function TerminalPanel({
 	cwd,
@@ -26,9 +34,9 @@ export function TerminalPanel({
 			fontSize: 11,
 			fontFamily: "SF Mono, Menlo, monospace",
 			theme: {
-				background: "#111113",
-				foreground: "#e5e5e8",
-				cursor: "#5b9bf8",
+				background: piVar("--pi-surface", "#111113"),
+				foreground: piVar("--pi-text", "#e5e5e8"),
+				cursor: piVar("--pi-accent", "#5b9bf8"),
 			},
 			cursorBlink: true,
 		});

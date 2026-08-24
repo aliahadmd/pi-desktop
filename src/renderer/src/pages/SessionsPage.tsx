@@ -232,7 +232,7 @@ export function SessionsPage({
 									seg.match ? (
 										<mark
 											key={i}
-											className="rounded-sm bg-blue-900 px-0.5 text-blue-200"
+											className="rounded-sm bg-blue-900 px-0.5 text-on-accent-soft"
 										>
 											{seg.text}
 										</mark>
@@ -292,7 +292,7 @@ export function SessionsPage({
 									type="button"
 									disabled={busy}
 									onClick={() => void remove(s)}
-									className="rounded px-2 py-1 text-[10px] text-neutral-500 hover:bg-red-950 hover:text-red-400"
+									className="rounded px-2 py-1 text-[10px] text-neutral-500 hover:bg-danger-soft hover:text-danger"
 								>
 									Delete
 								</button>

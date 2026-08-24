@@ -147,7 +147,7 @@ export function PackagesPanel(): React.JSX.Element {
 							type="button"
 							disabled={busy}
 							onClick={() => void remove(pkg)}
-							className="rounded px-2 py-0.5 text-[10px] text-neutral-500 hover:bg-red-950 hover:text-red-400"
+							className="rounded px-2 py-0.5 text-[10px] text-neutral-500 hover:bg-danger-soft hover:text-danger"
 						>
 							Remove
 						</button>

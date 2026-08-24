@@ -223,7 +223,7 @@ export function Composer({
 			}}
 		>
 			{dragging && (
-				<div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-500 bg-blue-950/30 text-sm text-blue-300">
+				<div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-500 bg-accent-soft/45 text-sm text-accent-strong">
 					Drop files here…
 				</div>
 			)}
@@ -240,7 +240,7 @@ export function Composer({
 					{(git.staged > 0 || git.unstaged > 0) && (
 						<span>
 							{git.staged > 0 && <span className="text-green-500">+{git.staged} </span>}
-							{git.unstaged > 0 && <span className="text-red-400">−{git.unstaged}</span>}
+							{git.unstaged > 0 && <span className="text-danger">−{git.unstaged}</span>}
 						</span>
 					)}
 					{git.ahead > 0 && (
@@ -271,20 +271,20 @@ export function Composer({
 					data-testid="plan-mode-banner"
 					onClick={() => onPickPermissionMode?.("askBeforeEdits")}
 					title="Click to exit Plan mode"
-					className="mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-blue-900/60 bg-blue-950/40 px-3 py-1.5 text-left text-[11px] text-blue-300 hover:border-blue-700"
+					className="mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-accent-line/60 bg-accent-soft/60 px-3 py-1.5 text-left text-[11px] text-accent-strong hover:border-accent-line"
 				>
 					<ListTodo size={12} strokeWidth={2} className="shrink-0" />
 					<span className="flex-1">
 						Plan mode — the agent can research but cannot modify files or run commands.
 					</span>
-					<span className="shrink-0 text-[10px] text-blue-400/70">exit</span>
+					<span className="shrink-0 text-[10px] text-accent-strong/70">exit</span>
 				</button>
 			)}
 
 			<div
 				className={`rounded-xl border transition-colors focus-within:border-blue-600/70 ${
 					permissionMode === "plan"
-						? "border-blue-800/60 bg-neutral-900/80"
+						? "border-accent-line/60 bg-neutral-900/80"
 						: permissionMode === "bypass"
 							? "border-amber-900/60 bg-neutral-900/80 focus-within:border-amber-600/70"
 							: "border-neutral-700/80 bg-neutral-900/80 focus-within:border-blue-600/70"
@@ -344,7 +344,7 @@ export function Composer({
 								<button
 									type="button"
 									onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
-									className="ml-0.5 flex items-center text-neutral-500 hover:text-red-400"
+									className="ml-0.5 flex items-center text-neutral-500 hover:text-danger"
 									title="Remove attachment"
 									aria-label={`Remove ${att.name}`}
 								>
@@ -364,7 +364,7 @@ export function Composer({
 									type="button"
 									onClick={() => setFollowUpMode(false)}
 									className={`px-2 py-1 text-[10px] ${
-										!followUpMode ? "bg-blue-950 text-blue-300" : "bg-neutral-900 text-neutral-500"
+										!followUpMode ? "bg-accent-soft text-accent-strong" : "bg-neutral-900 text-neutral-500"
 									}`}
 								>
 									Steer

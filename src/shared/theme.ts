@@ -23,8 +23,16 @@ export interface ThemeVars {
 	faint: string;
 	border: string;
 	accent: string;
+	/** Low-emphasis accent fill (selected rows, soft chips). Readable on both light and dark bgs. */
+	accentSoft: string;
+	/** High-contrast accent for text/icons on any background. */
+	accentStrong: string;
+	/** Accent-tinted border line. */
+	accentLine: string;
 	success: string;
+	successSoft: string;
 	danger: string;
+	dangerSoft: string;
 	warning: string;
 	userBubble: string;
 }
@@ -39,8 +47,13 @@ export const REQUIRED_THEME_VARS: Array<keyof ThemeVars> = [
 	"faint",
 	"border",
 	"accent",
+	"accentSoft",
+	"accentStrong",
+	"accentLine",
 	"success",
+	"successSoft",
 	"danger",
+	"dangerSoft",
 	"warning",
 	"userBubble",
 ];
@@ -59,8 +72,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			faint: "#5c5c64",
 			border: "#2e2e33",
 			accent: "#3b82f6",
+			accentSoft: "rgba(59, 130, 246, 0.16)",
+			accentStrong: "#7cb0fb",
+			accentLine: "rgba(59, 130, 246, 0.45)",
 			success: "#22c55e",
+			successSoft: "rgba(34, 197, 94, 0.16)",
 			danger: "#ef4444",
+			dangerSoft: "rgba(239, 68, 68, 0.16)",
 			warning: "#f59e0b",
 			userBubble: "rgba(30, 58, 138, 0.7)",
 		},
@@ -79,8 +97,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			faint: "#9a9aa2",
 			border: "#e4e4e8",
 			accent: "#2563eb",
+			accentSoft: "rgba(37, 99, 235, 0.10)",
+			accentStrong: "#1d4ed8",
+			accentLine: "rgba(37, 99, 235, 0.40)",
 			success: "#16a34a",
+			successSoft: "rgba(22, 163, 74, 0.12)",
 			danger: "#dc2626",
+			dangerSoft: "rgba(220, 38, 38, 0.10)",
 			warning: "#d97706",
 			userBubble: "rgba(219, 234, 254, 0.9)",
 		},
@@ -99,8 +122,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			faint: "#7f849c",
 			border: "#45475a",
 			accent: "#89b4fa",
+			accentSoft: "rgba(137, 180, 250, 0.16)",
+			accentStrong: "#89b4fa",
+			accentLine: "rgba(137, 180, 250, 0.45)",
 			success: "#a6e3a1",
+			successSoft: "rgba(166, 227, 161, 0.14)",
 			danger: "#f38ba8",
+			dangerSoft: "rgba(243, 139, 168, 0.14)",
 			warning: "#fab387",
 			userBubble: "rgba(49, 50, 68, 0.85)",
 		},
@@ -119,8 +147,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			faint: "#93a1a1",
 			border: "#ddd6c1",
 			accent: "#268bd2",
+			accentSoft: "rgba(38, 139, 210, 0.12)",
+			accentStrong: "#1a6fa5",
+			accentLine: "rgba(38, 139, 210, 0.40)",
 			success: "#859900",
+			successSoft: "rgba(133, 153, 0, 0.14)",
 			danger: "#dc322f",
+			dangerSoft: "rgba(220, 50, 47, 0.12)",
 			warning: "#b58900",
 			userBubble: "rgba(238, 232, 213, 0.95)",
 		},
@@ -139,8 +172,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			faint: "#6e7681",
 			border: "#30363d",
 			accent: "#2f81f7",
+			accentSoft: "rgba(47, 129, 247, 0.16)",
+			accentStrong: "#6cb0ff",
+			accentLine: "rgba(47, 129, 247, 0.45)",
 			success: "#3fb950",
+			successSoft: "rgba(63, 185, 80, 0.16)",
 			danger: "#f85149",
+			dangerSoft: "rgba(248, 81, 73, 0.16)",
 			warning: "#d29922",
 			userBubble: "rgba(33, 38, 45, 0.85)",
 		},

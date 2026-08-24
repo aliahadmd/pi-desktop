@@ -324,7 +324,7 @@ export default function ChatPage({
 				<div className="flex flex-1 flex-col items-center justify-center gap-3">
 					<p className="text-sm text-neutral-400">No open sessions.</p>
 					{createError !== null && (
-						<p className="max-w-md rounded border border-red-900 bg-red-950/50 px-3 py-1.5 text-xs text-red-300">
+						<p className="max-w-md rounded border border-danger/40 bg-danger-soft/50 px-3 py-1.5 text-xs text-red-300">
 							{createError}
 						</p>
 					)}
@@ -398,7 +398,7 @@ export default function ChatPage({
 														onKeyDown={(e) => {
 															if (e.key === "Enter") closeTerminalTab(i);
 														}}
-														className="ml-0.5 text-neutral-600 hover:text-red-400"
+														className="ml-0.5 text-neutral-600 hover:text-danger"
 													>
 														×
 													</span>
@@ -563,7 +563,7 @@ export default function ChatPage({
 									onChange={(e) => setCompactInstructions(e.target.value)}
 									rows={3}
 									placeholder="Optional instructions for the summary…"
-									className="mb-4 w-full resize-none rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-blue-500"
+									className="mb-4 w-full resize-none rounded border border-neutral-700 bg-app-bg px-3 py-2 text-xs outline-none focus:border-blue-500"
 								/>
 								<div className="flex justify-end gap-2">
 									<button
@@ -653,7 +653,7 @@ export default function ChatPage({
 					)}
 
 					{active.dead !== undefined && (
-						<div className="flex items-center gap-2 border-t border-red-900 bg-red-950/60 px-4 py-2 text-xs text-red-300">
+						<div className="flex items-center gap-2 border-t border-danger/40 bg-danger-soft/60 px-4 py-2 text-xs text-red-300">
 							<span className="flex-1">Backend died: {active.dead}</span>
 							<button
 								type="button"

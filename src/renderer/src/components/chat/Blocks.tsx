@@ -30,15 +30,15 @@ import type {
 function DiffView({ diff }: { diff: string }): ReactNode {
 	const lines = diff.split("\n");
 	return (
-		<div className="overflow-x-auto rounded bg-neutral-950 font-mono text-[11px] leading-relaxed">
+		<div className="overflow-x-auto rounded bg-app-bg font-mono text-[11px] leading-relaxed">
 			{lines.map((line, i) => {
 				const cls = line.startsWith("+")
-					? "bg-green-950/60 text-green-300"
+					? "bg-success-soft text-app-text"
 					: line.startsWith("-")
-						? "bg-red-950/60 text-red-300"
+						? "bg-danger-soft text-app-text"
 						: line.startsWith("@@") || line.startsWith("diff") || line.startsWith("index")
-							? "text-neutral-500"
-							: "text-neutral-300";
+							? "text-app-faint"
+							: "text-app-muted";
 				return (
 					<div key={i} className={`px-3 whitespace-pre ${cls}`}>
 						{line}
@@ -55,7 +55,7 @@ const isDiff = (output: string): boolean =>
 export const UserBlockView = memo(function UserBlockView({ block }: { block: UserBlock }) {
 	return (
 		<div className="flex justify-end px-4 py-2" data-kind="user">
-			<div className="max-w-[80%] rounded-xl rounded-br-sm bg-blue-950/70 px-4 py-2.5 text-sm whitespace-pre-wrap text-neutral-100">
+			<div className="max-w-[80%] rounded-xl rounded-br-sm bg-accent-soft px-4 py-2.5 text-sm whitespace-pre-wrap text-neutral-100">
 				{block.text}
 			</div>
 		</div>
@@ -84,9 +84,9 @@ const ToolBlockView = memo(function ToolBlockView({
 	const blockedByPermission = blockReason !== undefined;
 	const statusCls =
 		block.status === "running"
-			? "text-blue-400"
+			? "text-accent-strong"
 			: block.status === "error"
-				? "text-red-400"
+				? "text-danger"
 				: "text-green-500";
 	// Direct `!`/`!!` composer bash gets a requestId ("bash-…"/"rpc-bash") as its
 	// block id; agent-driven bash tool calls must go through session.abort instead.
@@ -101,7 +101,7 @@ const ToolBlockView = memo(function ToolBlockView({
 					onClick={() => toggleExpanded(key, fallback)}
 					className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-xs"
 				>
-					<span className={`flex shrink-0 items-center ${blockedByPermission ? "text-blue-400" : statusCls}`}>
+					<span className={`flex shrink-0 items-center ${blockedByPermission ? "text-accent-strong" : statusCls}`}>
 						{blockedByPermission ? (
 							<ListTodo size={12} strokeWidth={2.25} />
 						) : (
@@ -212,7 +212,7 @@ const AssistantBlockView = memo(function AssistantBlockView({
 							onClick={() => onToolClick?.(part.toolCallId)}
 							className="mr-2 mb-1 inline-flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 font-mono text-[10px] text-neutral-300 hover:bg-neutral-700"
 						>
-							<span className={`flex shrink-0 items-center ${streaming ? "text-blue-400" : "text-green-500"}`}>
+							<span className={`flex shrink-0 items-center ${streaming ? "text-accent-strong" : "text-green-500"}`}>
 								<Wrench size={10} strokeWidth={2} />
 							</span>
 							{part.toolName}
@@ -229,7 +229,7 @@ const AssistantBlockView = memo(function AssistantBlockView({
 				) : null;
 			})}
 			{block.status === "error" && (
-				<div className="text-xs text-red-400">Generation failed.</div>
+				<div className="text-xs text-danger">Generation failed.</div>
 			)}
 			{block.status === "aborted" && <div className="text-xs text-amber-500">Aborted.</div>}
 			{!streaming && (
@@ -291,7 +291,7 @@ const NoticeBlockView = memo(function NoticeBlockView({
 	if (dismissed) return null;
 	const cls =
 		block.level === "error"
-			? "text-red-400 border-red-900 bg-red-950/40"
+			? "text-danger border-danger/40 bg-danger-soft"
 			: block.level === "warn"
 				? "text-amber-400 border-amber-900 bg-amber-950/40"
 				: "text-neutral-400 border-neutral-800 bg-neutral-900/40";
@@ -337,7 +337,7 @@ const ToolGroupView = function ToolGroupView({
 				onClick={() => toggleExpanded(key, fallback)}
 				className="flex w-full items-center gap-2 px-4 py-1 text-left text-xs text-neutral-400 hover:bg-neutral-900/50"
 			>
-				<span className={`flex shrink-0 items-center ${running ? "text-blue-400" : errored ? "text-red-400" : "text-green-500"}`}>
+				<span className={`flex shrink-0 items-center ${running ? "text-accent-strong" : errored ? "text-danger" : "text-green-500"}`}>
 					{running ? (
 						<LoaderCircle size={12} strokeWidth={2.25} className="animate-spin" />
 					) : errored ? (

@@ -12,8 +12,13 @@
 	--pi-faint: #5c5c64;
 	--pi-border: #2e2e33;
 	--pi-accent: #3b82f6;
+	--pi-accent-soft: rgba(59, 130, 246, 0.16);
+	--pi-accent-strong: #7cb0fb;
+	--pi-accent-line: rgba(59, 130, 246, 0.45);
 	--pi-success: #22c55e;
+	--pi-success-soft: rgba(34, 197, 94, 0.16);
 	--pi-danger: #ef4444;
+	--pi-danger-soft: rgba(239, 68, 68, 0.16);
 	--pi-warning: #f59e0b;
 	--pi-user-bubble: rgba(30, 58, 138, 0.7);
 	--bg-alpha: 1;
@@ -29,8 +34,14 @@
 	--color-app-faint: var(--pi-faint);
 	--color-app-border: var(--pi-border);
 	--color-accent: var(--pi-accent);
+	--color-accent-soft: var(--pi-accent-soft);
+	--color-on-accent-soft: var(--pi-text);
+	--color-accent-strong: var(--pi-accent-strong);
+	--color-accent-line: var(--pi-accent-line);
 	--color-success: var(--pi-success);
+	--color-success-soft: var(--pi-success-soft);
 	--color-danger: var(--pi-danger);
+	--color-danger-soft: var(--pi-danger-soft);
 	--color-warning: var(--pi-warning);
 }
 
@@ -51,8 +62,8 @@
 	--color-neutral-300: var(--pi-muted);
 	--color-neutral-200: var(--pi-text);
 	--color-neutral-100: var(--pi-text);
-	--color-blue-300: var(--pi-accent);
-	--color-blue-400: var(--pi-accent);
+	--color-blue-300: var(--pi-accent-strong);
+	--color-blue-400: var(--pi-accent-strong);
 	--color-blue-500: var(--pi-accent);
 	--color-blue-600: var(--pi-accent);
 	--color-red-500: var(--pi-danger);

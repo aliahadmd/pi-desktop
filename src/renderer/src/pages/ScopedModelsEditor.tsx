@@ -103,7 +103,7 @@ export function ScopedModelsEditor(): React.JSX.Element {
 							<button
 								type="button"
 								onClick={() => void persist(models.filter((_, j) => j !== i))}
-								className="rounded px-1.5 py-1 text-[10px] text-neutral-500 hover:bg-red-950 hover:text-red-400"
+								className="rounded px-1.5 py-1 text-[10px] text-neutral-500 hover:bg-danger-soft hover:text-danger"
 							>
 								×
 							</button>

@@ -380,7 +380,7 @@ export default function App(): React.JSX.Element {
 								if (e.key === "Escape") respondLogin("");
 							}}
 							placeholder="Paste the value and press Enter…"
-							className="mb-4 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-blue-500"
+							className="mb-4 w-full rounded border border-neutral-700 bg-app-bg px-3 py-2 text-xs outline-none focus:border-blue-500"
 						/>
 						<div className="flex justify-end gap-2">
 							<button

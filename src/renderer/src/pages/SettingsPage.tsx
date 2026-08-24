@@ -193,12 +193,12 @@ function GeneralSection({
 				hint="Edits pi's global settings (~/.pi/agent/settings.json). Project settings stay in each repo's .pi/settings.json."
 			/>
 			{error !== null && (
-				<div className="mb-3 rounded border border-red-900 bg-red-950/50 px-3 py-2 text-xs text-red-300">
+				<div className="mb-3 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">
 					{error}
 				</div>
 			)}
 			{saved && (
-				<div className="mb-3 rounded border border-green-900 bg-green-950/50 px-3 py-2 text-xs text-green-300">
+				<div className="mb-3 rounded border border-success/40 bg-success-soft px-3 py-2 text-xs text-success">
 					Saved.
 				</div>
 			)}

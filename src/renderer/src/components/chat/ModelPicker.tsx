@@ -179,7 +179,7 @@ export function ModelPicker({
 												onMouseMove={() => setCursor(idx)}
 												className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
 													idx === cursor ? "bg-neutral-800" : ""
-												} ${active ? "text-blue-400" : "text-neutral-300"}`}
+												} ${active ? "text-accent-strong" : "text-neutral-300"}`}
 											>
 												<span className="min-w-0 flex-1 truncate">{m.name}</span>
 												{m.reasoning && (
@@ -191,7 +191,7 @@ export function ModelPicker({
 													{Math.round(m.contextWindow / 1000)}k
 												</span>
 												{active && (
-												<Check size={11} strokeWidth={2.5} className="shrink-0 text-blue-400" />
+												<Check size={11} strokeWidth={2.5} className="shrink-0 text-accent-strong" />
 											)}
 											</button>
 										);

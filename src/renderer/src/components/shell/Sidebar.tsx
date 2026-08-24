@@ -329,7 +329,7 @@ export function Sidebar({
 
 	return (
 		<div
-			className="relative flex h-full flex-col border-r border-neutral-800 bg-neutral-950/60"
+			className="relative flex h-full flex-col border-r border-neutral-800 bg-app-bg/60"
 			style={{ width: "var(--sidebar-w)" }}
 			data-testid="sidebar"
 		>
@@ -363,7 +363,7 @@ export function Sidebar({
 			</div>
 
 			{createError !== null && (
-				<p className="mx-2.5 mb-1 rounded bg-red-950/70 px-2 py-1 text-[10px] text-red-300">
+				<p className="mx-2.5 mb-1 rounded bg-danger-soft px-2 py-1 text-[10px] text-red-300">
 					{createError}
 				</p>
 			)}
@@ -381,7 +381,7 @@ export function Sidebar({
 					</span>
 					<span>Packages</span>
 					{installedCount > 0 && (
-						<span className="ml-auto rounded-full bg-blue-950 px-1.5 text-[9px] font-medium text-blue-400">
+						<span className="ml-auto rounded-full bg-accent-soft px-1.5 text-[9px] font-medium text-accent-strong">
 							{installedCount}
 						</span>
 					)}
@@ -421,7 +421,7 @@ export function Sidebar({
 										setSortOpen(false);
 									}}
 									className={`block w-full px-3 py-1 text-left text-xs hover:bg-neutral-800 ${
-										sortMode === m ? "text-blue-400" : "text-neutral-300"
+										sortMode === m ? "text-accent-strong" : "text-neutral-300"
 									}`}
 								>
 									{m === "recent" ? "Recent" : m === "name" ? "Name" : "Pinned"}
@@ -586,7 +586,7 @@ export function Sidebar({
 									setConfirmDelete(target.filePath);
 									setMenuFor(null);
 								}}
-								className="block w-full rounded px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-950"
+								className="block w-full rounded px-3 py-1.5 text-left text-xs text-danger hover:bg-danger-soft"
 							>
 								Delete session…
 							</button>
@@ -647,7 +647,7 @@ export function Sidebar({
 						profileMenuOpen ? "bg-neutral-900" : ""
 					}`}
 				>
-					<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-950 text-[10px] font-medium text-blue-400">
+					<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[10px] font-medium text-accent-strong">
 						{initialsOf(userName)}
 					</span>
 					<span className="min-w-0 flex-1 truncate text-xs text-neutral-400">

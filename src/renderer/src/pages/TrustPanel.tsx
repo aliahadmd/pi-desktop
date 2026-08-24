@@ -87,7 +87,7 @@ export function TrustPanel(): React.JSX.Element {
 				</div>
 
 				{error !== null && (
-					<p className="mb-3 text-xs text-red-400">{error}</p>
+					<p className="mb-3 text-xs text-danger">{error}</p>
 				)}
 
 				{tab === "trust" && (
@@ -112,7 +112,7 @@ export function TrustPanel(): React.JSX.Element {
 											entry.decision === "trusted"
 												? "bg-green-950 text-green-400"
 												: entry.decision === "denied"
-													? "bg-red-950 text-red-400"
+													? "bg-danger-soft text-danger"
 													: "bg-neutral-800 text-neutral-400"
 										}`}
 									>
@@ -128,7 +128,7 @@ export function TrustPanel(): React.JSX.Element {
 									<button
 										type="button"
 										onClick={() => void setDecision(entry.path, "denied")}
-										className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-red-950 hover:text-red-400"
+										className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-danger-soft hover:text-danger"
 									>
 										Deny
 									</button>
@@ -157,7 +157,7 @@ export function TrustPanel(): React.JSX.Element {
 								No keybindings.json found — pi defaults are in effect.
 							</p>
 						) : (
-							<pre className="rounded bg-neutral-950 p-4 font-mono text-[11px] whitespace-pre-wrap text-neutral-300">
+							<pre className="rounded bg-app-bg p-4 font-mono text-[11px] whitespace-pre-wrap text-neutral-300">
 								{keybindings}
 							</pre>
 						)}

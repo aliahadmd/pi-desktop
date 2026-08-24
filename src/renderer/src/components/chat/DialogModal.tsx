@@ -65,7 +65,7 @@ export function DialogModal({
 								onChange={(e) => setValue(e.target.value)}
 								placeholder={request.placeholder}
 								autoFocus
-								className="mb-4 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+								className="mb-4 w-full rounded border border-neutral-700 bg-app-bg px-3 py-2 text-sm outline-none focus:border-blue-500"
 							/>
 						) : (
 							<textarea
@@ -73,7 +73,7 @@ export function DialogModal({
 								onChange={(e) => setValue(e.target.value)}
 								rows={8}
 								autoFocus
-								className="mb-4 w-full resize-none rounded border border-neutral-700 bg-neutral-950 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
+								className="mb-4 w-full resize-none rounded border border-neutral-700 bg-app-bg px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
 							/>
 						)}
 						<div className="flex justify-end gap-2">

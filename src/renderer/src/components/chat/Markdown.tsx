@@ -74,7 +74,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }): ReactNode {
 
 export const Markdown = memo(function Markdown({ text }: { text: string }): ReactNode {
 	return (
-		<div className="text-sm leading-relaxed text-neutral-200 [&_a]:text-blue-400 [&_a]:underline [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-2 [&_table]:text-xs">
+		<div className="text-sm leading-relaxed text-neutral-200 [&_a]:text-accent-strong [&_a]:underline [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-2 [&_table]:text-xs">
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm]}
 				components={{
