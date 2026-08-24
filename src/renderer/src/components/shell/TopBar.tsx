@@ -52,15 +52,16 @@ export function TopBar({
 			className="flex h-10 shrink-0 items-center border-b border-neutral-800 bg-neutral-950/80"
 			data-testid="top-bar"
 		>
-			{/* Sidebar toggle: FIXED left position, clear of the macOS traffic
-			    lights (x:16,y:16). Layout controls live here permanently. */}
+			{/* Sidebar toggle: FIXED left position. macOS puts the traffic
+			    lights at x:16 with ~52px total width; we add breathing room so
+			    the toggle does not crowd them (visual gap ≈ 12px). */}
 			<button
 				type="button"
 				title={sidebarHidden ? "Show sidebar (⌘\)" : "Hide sidebar (⌘\)"}
 				data-testid="topbar-sidebar-toggle"
 				aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
 				onClick={onToggleSidebar}
-				className={`ml-[72px] rounded p-1.5 transition-colors hover:bg-neutral-800 ${
+				className={`ml-[84px] rounded p-1.5 transition-colors hover:bg-neutral-800 ${
 					sidebarHidden ? "text-blue-400" : "text-neutral-400 hover:text-neutral-200"
 				}`}
 			>
@@ -120,7 +121,7 @@ export function TopBar({
 						data-testid="topbar-export-jsonl"
 						title="Export session (JSONL)"
 						onClick={() => onExport("jsonl")}
-						className="rounded p-1.5 text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
+						className="mr-2 rounded p-1.5 text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
 					>
 						<FileJson size={14} strokeWidth={1.75} />
 					</button>
