@@ -9,7 +9,7 @@ import type { SessionUi } from "../../stores/pi-sessions";
 const PHASE_LABEL: Record<SessionUi["phase"], { text: string; cls: string }> = {
 	idle: { text: "idle", cls: "bg-neutral-600" },
 	streaming: { text: "streaming", cls: "bg-blue-500 animate-pulse" },
-	compacting: { text: "compacting", cls: "bg-purple-500 animate-pulse" },
+	compacting: { text: "compacting", cls: "bg-info animate-pulse" },
 	retrying: { text: "retrying", cls: "bg-amber-500 animate-pulse" },
 };
 

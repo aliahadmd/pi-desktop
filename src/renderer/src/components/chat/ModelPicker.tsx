@@ -183,7 +183,7 @@ export function ModelPicker({
 											>
 												<span className="min-w-0 flex-1 truncate">{m.name}</span>
 												{m.reasoning && (
-													<span className="rounded bg-purple-950 px-1 text-[8px] text-purple-400">
+													<span className="rounded bg-info-soft px-1 text-[8px] text-info">
 														thinking
 													</span>
 												)}

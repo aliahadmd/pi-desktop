@@ -373,7 +373,7 @@ export function Composer({
 									type="button"
 									onClick={() => setFollowUpMode(true)}
 									className={`px-2 py-1 text-[10px] ${
-										followUpMode ? "bg-purple-950 text-purple-300" : "bg-neutral-900 text-neutral-500"
+										followUpMode ? "bg-info-soft text-info" : "bg-neutral-900 text-neutral-500"
 									}`}
 								>
 									Follow-up

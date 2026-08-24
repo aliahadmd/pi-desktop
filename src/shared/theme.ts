@@ -29,6 +29,10 @@ export interface ThemeVars {
 	accentStrong: string;
 	/** Accent-tinted border line. */
 	accentLine: string;
+	/** Secondary accent for "thinking"/reasoning affordances. */
+	info: string;
+	/** Low-emphasis fill for info chips. */
+	infoSoft: string;
 	success: string;
 	successSoft: string;
 	danger: string;
@@ -50,6 +54,8 @@ export const REQUIRED_THEME_VARS: Array<keyof ThemeVars> = [
 	"accentSoft",
 	"accentStrong",
 	"accentLine",
+	"info",
+	"infoSoft",
 	"success",
 	"successSoft",
 	"danger",
@@ -75,6 +81,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accentSoft: "rgba(59, 130, 246, 0.16)",
 			accentStrong: "#7cb0fb",
 			accentLine: "rgba(59, 130, 246, 0.45)",
+			info: "#a78bfa",
+			infoSoft: "rgba(167, 139, 250, 0.16)",
 			success: "#22c55e",
 			successSoft: "rgba(34, 197, 94, 0.16)",
 			danger: "#ef4444",
@@ -100,6 +108,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accentSoft: "rgba(37, 99, 235, 0.10)",
 			accentStrong: "#1d4ed8",
 			accentLine: "rgba(37, 99, 235, 0.40)",
+			info: "#7c3aed",
+			infoSoft: "rgba(124, 58, 237, 0.10)",
 			success: "#16a34a",
 			successSoft: "rgba(22, 163, 74, 0.12)",
 			danger: "#dc2626",
@@ -125,6 +135,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accentSoft: "rgba(137, 180, 250, 0.16)",
 			accentStrong: "#89b4fa",
 			accentLine: "rgba(137, 180, 250, 0.45)",
+			info: "#cba6f7",
+			infoSoft: "rgba(203, 166, 247, 0.16)",
 			success: "#a6e3a1",
 			successSoft: "rgba(166, 227, 161, 0.14)",
 			danger: "#f38ba8",
@@ -150,6 +162,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accentSoft: "rgba(38, 139, 210, 0.12)",
 			accentStrong: "#1a6fa5",
 			accentLine: "rgba(38, 139, 210, 0.40)",
+			info: "#6c71c4",
+			infoSoft: "rgba(108, 113, 196, 0.12)",
 			success: "#859900",
 			successSoft: "rgba(133, 153, 0, 0.14)",
 			danger: "#dc322f",
@@ -175,6 +189,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accentSoft: "rgba(47, 129, 247, 0.16)",
 			accentStrong: "#6cb0ff",
 			accentLine: "rgba(47, 129, 247, 0.45)",
+			info: "#a371f7",
+			infoSoft: "rgba(163, 113, 247, 0.16)",
 			success: "#3fb950",
 			successSoft: "rgba(63, 185, 80, 0.16)",
 			danger: "#f85149",

@@ -609,7 +609,7 @@ export default function ChatPage({
 													refreshState(active.id);
 												});
 										}}
-										className="rounded bg-purple-700 px-3 py-1.5 text-xs text-white hover:bg-purple-600 disabled:opacity-40"
+										className="rounded bg-info px-3 py-1.5 text-xs text-white hover:bg-info/80 disabled:opacity-40"
 									>
 										{compacting ? "Compacting…" : "Compact"}
 									</button>

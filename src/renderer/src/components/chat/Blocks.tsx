@@ -55,7 +55,7 @@ const isDiff = (output: string): boolean =>
 export const UserBlockView = memo(function UserBlockView({ block }: { block: UserBlock }) {
 	return (
 		<div className="flex justify-end px-4 py-2" data-kind="user">
-			<div className="max-w-[80%] rounded-xl rounded-br-sm bg-accent-soft px-4 py-2.5 text-sm whitespace-pre-wrap text-neutral-100">
+			<div className="max-w-[80%] rounded-xl rounded-br-sm bg-user-bubble px-4 py-2.5 text-sm whitespace-pre-wrap text-app-text">
 				{block.text}
 			</div>
 		</div>
@@ -210,9 +210,9 @@ const AssistantBlockView = memo(function AssistantBlockView({
 							key={i}
 							type="button"
 							onClick={() => onToolClick?.(part.toolCallId)}
-							className="mr-2 mb-1 inline-flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 font-mono text-[10px] text-neutral-300 hover:bg-neutral-700"
+							className="mr-2 mb-1 inline-flex items-center gap-1 rounded bg-app-surface2 px-2 py-0.5 font-mono text-[10px] text-app-text hover:bg-app-border"
 						>
-							<span className={`flex shrink-0 items-center ${streaming ? "text-accent-strong" : "text-green-500"}`}>
+							<span className={`flex shrink-0 items-center ${streaming ? "text-accent-strong" : "text-success"}`}>
 								<Wrench size={10} strokeWidth={2} />
 							</span>
 							{part.toolName}

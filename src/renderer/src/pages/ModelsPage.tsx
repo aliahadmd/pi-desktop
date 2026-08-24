@@ -174,7 +174,7 @@ export function ModelsPage({
 									{provider.id} · {provider.configured ? provider.source ?? "configured" : "not configured"}
 								</p>
 								{SUBSCRIPTION_COPY[provider.id] !== undefined && (
-									<p className="mt-2 rounded border border-purple-900 bg-purple-950/40 px-3 py-1.5 text-[11px] text-purple-200">
+									<p className="mt-2 rounded border border-info/40 bg-info-soft px-3 py-1.5 text-[11px] text-app-text">
 										{SUBSCRIPTION_COPY[provider.id]}
 									</p>
 								)}
@@ -213,7 +213,7 @@ export function ModelsPage({
 												type="button"
 												disabled={busy}
 												onClick={() => void login(selectedProvider, "oauth")}
-												className="rounded bg-purple-700 px-3 py-1.5 text-xs text-white hover:bg-purple-600 disabled:opacity-40"
+												className="rounded bg-info px-3 py-1.5 text-xs text-white hover:bg-info/80 disabled:opacity-40"
 											>
 												{provider.configured ? "Re-login (OAuth)" : "Login (OAuth)"}
 											</button>
@@ -349,7 +349,7 @@ export function ModelsPage({
 													<td className="px-2 py-1.5 text-neutral-200">
 														{m.name}
 														{m.reasoning && (
-															<span className="ml-1.5 text-[9px] text-purple-400">reasoning</span>
+															<span className="ml-1.5 text-[9px] text-info">reasoning</span>
 														)}
 													</td>
 													<td className="px-2 py-1.5 font-mono text-[10px] text-neutral-400">
