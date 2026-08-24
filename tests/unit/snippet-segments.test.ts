@@ -58,12 +58,22 @@ describe("SessionsPage render", () => {
 		expect(page).toContain("<mark");
 	});
 
-	it("is the only page that stopped using innerHTML — Markdown.tsx is unchanged", () => {
-		// Markdown.tsx renders shiki's locally generated HTML for code blocks and
-		// is deliberately out of scope; this guard documents that the sweep was
-		// exhaustive rather than accidental.
-		const markdown = read("src/renderer/src/components/chat/Markdown.tsx");
-		expect(markdown).toContain("dangerouslySetInnerHTML");
+	it("confines innerHTML to the shared code renderer", () => {
+		// Shiki emits its own locally generated highlight markup, so exactly one
+		// module is allowed to inject HTML: components/common/CodeView.tsx.
+		// Markdown.tsx and Dock.tsx now delegate there instead of each holding
+		// their own dangerouslySetInnerHTML call.
+		const codeView = read("src/renderer/src/components/common/CodeView.tsx");
+		expect(codeView).toContain("dangerouslySetInnerHTML");
+
+		for (const p of [
+			"src/renderer/src/components/chat/Markdown.tsx",
+			"src/renderer/src/components/workspace/Dock.tsx",
+		]) {
+			expect(read(p), `${p} should delegate to CodeView`).not.toContain(
+				"dangerouslySetInnerHTML",
+			);
+		}
 	});
 });
 

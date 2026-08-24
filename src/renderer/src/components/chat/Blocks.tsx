@@ -5,6 +5,7 @@
 import { memo, useState, type ReactNode } from "react";
 import { useTranscriptUi } from "../../stores/transcript-ui";
 import Ansi from "ansi-to-react";
+import { DiffView, isDiff } from "../common/CodeView";
 import {
 	Check,
 	ChevronDown,
@@ -27,30 +28,6 @@ import type {
 	UserBlock,
 } from "../../lib/ingest";
 
-function DiffView({ diff }: { diff: string }): ReactNode {
-	const lines = diff.split("\n");
-	return (
-		<div className="overflow-x-auto rounded bg-app-bg font-mono text-[11px] leading-relaxed">
-			{lines.map((line, i) => {
-				const cls = line.startsWith("+")
-					? "bg-success-soft text-app-text"
-					: line.startsWith("-")
-						? "bg-danger-soft text-app-text"
-						: line.startsWith("@@") || line.startsWith("diff") || line.startsWith("index")
-							? "text-app-faint"
-							: "text-app-muted";
-				return (
-					<div key={i} className={`px-3 whitespace-pre ${cls}`}>
-						{line}
-					</div>
-				);
-			})}
-		</div>
-	);
-}
-
-const isDiff = (output: string): boolean =>
-	output.startsWith("diff --git") || output.includes("\n@@ ");
 
 export const UserBlockView = memo(function UserBlockView({ block }: { block: UserBlock }) {
 	return (
@@ -147,7 +124,7 @@ const ToolBlockView = memo(function ToolBlockView({
 					{isDiffOutput ? (
 						<DiffView diff={block.output} />
 					) : (
-						<pre className="max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-neutral-300">
+						<pre className="max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-app-muted">
 							<Ansi>{block.output.slice(0, 20_000)}</Ansi>
 						</pre>
 					)}

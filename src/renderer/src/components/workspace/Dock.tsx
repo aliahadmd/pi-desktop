@@ -2,7 +2,6 @@
  * Workspace dock for the chat view: file explorer, review queue, commands.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import Ansi from "ansi-to-react";
 import {
 	Check,
 	ChevronDown,
@@ -11,9 +10,7 @@ import {
 	X,
 } from "lucide-react";
 import { Markdown } from "../chat/Markdown";
-import { ensureLanguage, highlight, langFor } from "../../lib/highlight";
-import { shikiThemeFor } from "../../../../shared/theme";
-import { useThemeId } from "../../lib/theme-context";
+import { AutoOutput, CodeView } from "../common/CodeView";
 import { parseArgumentHintFromHint } from "../../lib/command-hints";
 
 // ---------------------------------------------------------------------------
@@ -220,46 +217,10 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 							close
 						</button>
 					</div>
-					<HighlightedFile path={fileContent.path} content={fileContent.content.slice(0, 100_000)} />
+					<CodeView code={fileContent.content} lang={fileContent.path} className="text-[11px]" />
 				</div>
 			)}
 		</div>
-	);
-}
-
-
-/**
- * File preview with shiki highlighting, language inferred from the file name.
- * Falls back to plain pre when the grammar is unknown or highlighting fails.
- */
-function HighlightedFile({ path, content }: { path: string; content: string }): React.JSX.Element {
-	const themeId = useThemeId();
-	const [html, setHtml] = useState<string | null>(null);
-	useEffect(() => {
-		let cancelled = false;
-		const id = langFor(path);
-		if (id === "text") return;
-		void (async () => {
-			if (!(await ensureLanguage(id))) return;
-			const out = await highlight(content, id, shikiThemeFor(themeId));
-			if (!cancelled) setHtml(out);
-		})().catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [path, content, themeId]);
-	if (html !== null) {
-		return (
-			<div
-				className="overflow-x-auto font-mono text-[11px] [&_pre]:bg-transparent [&_code]:leading-relaxed"
-				dangerouslySetInnerHTML={{ __html: html }}
-			/>
-		);
-	}
-	return (
-		<pre className="font-mono text-[11px] whitespace-pre-wrap text-app-muted">
-			{content.slice(0, 50_000)}
-		</pre>
 	);
 }
 
@@ -620,7 +581,6 @@ export function ReviewQueue({ blocks }: { blocks: Block[] }): React.JSX.Element 
 		<div className="overflow-y-auto p-2">
 			{reviewable.map((b) => {
 				if (b.kind !== "tool") return null;
-				const isDiff = b.output.startsWith("diff --git") || b.output.includes("\n@@ ");
 				return (
 					<div key={b.id} className="mb-2 rounded border border-neutral-800">
 						<div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-1.5">
@@ -647,9 +607,9 @@ export function ReviewQueue({ blocks }: { blocks: Block[] }): React.JSX.Element 
 								Copy patch
 							</button>
 						</div>
-						<pre className="max-h-40 overflow-auto p-2 font-mono text-[10px] whitespace-pre-wrap text-neutral-300">
-							{isDiff ? b.output : <Ansi>{b.output.slice(0, 5_000)}</Ansi>}
-						</pre>
+						<div className="max-h-40 overflow-auto">
+							<AutoOutput output={b.output} limit={5_000} className="p-2 text-[10px]" />
+						</div>
 					</div>
 				);
 			})}

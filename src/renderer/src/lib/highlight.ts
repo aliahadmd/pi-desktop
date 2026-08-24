@@ -37,10 +37,16 @@ async function getHighlighter(): Promise<Highlighter> {
 			shiki.createHighlighter({
 				themes: [...SHIKI_THEMES],
 				langs: [...BASE_LANGS],
+				// The renderer's CSP forbids 'unsafe-eval', so shiki's default
+				// Oniguruma engine (WebAssembly) cannot instantiate — it threw
+				// CompileError and every code surface silently fell back to
+				// plain text. The pure-JavaScript engine needs no eval/wasm.
+				engine: shiki.createJavaScriptRegexEngine({ forgiving: true }),
 			}),
 		);
 		shikiHighlighter = promise;
-		promise.catch(() => {
+		promise.catch((err: unknown) => {
+			console.error("[highlight] highlighter init failed", err);
 			if (shikiHighlighter === promise) shikiHighlighter = null;
 		});
 	}
@@ -155,11 +161,15 @@ export async function ensureLanguage(
 	const h = await getHighlighter();
 	const loaded = h.getLoadedLanguages();
 	if (loaded.includes(lang)) return true;
-	if (!(lang in shiki.bundledLanguages)) return false;
+	if (!(lang in shiki.bundledLanguages)) {
+		console.error("[highlight] no bundled grammar for", lang);
+		return false;
+	}
 	try {
 		await h.loadLanguage(lang);
 		return true;
-	} catch {
+	} catch (err) {
+		console.error("[highlight] loadLanguage failed", lang, err);
 		return false;
 	}
 }
@@ -171,9 +181,9 @@ export async function highlight(
 	shikiTheme: string,
 ): Promise<string> {
 	const h = await getHighlighter();
-	return h.codeToHtml(code, {
-		lang,
-		themes: { dark: shikiTheme, light: shikiTheme },
-		defaultColor: false,
-	});
+	// Single `theme` (not the dual light/dark `themes` map): the app already
+	// swaps presets explicitly, and the dual form emits --shiki-* custom
+	// properties that need extra CSS to become real colors — without it every
+	// token inherited one flat color and code looked unhighlighted.
+	return h.codeToHtml(code, { lang, theme: shikiTheme });
 }

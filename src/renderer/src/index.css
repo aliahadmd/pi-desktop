@@ -152,6 +152,15 @@ html[data-transparency="on"] body {
 	background: transparent;
 }
 
+/* Shiki output (phase 7): the highlighter inlines its own theme background on
+   <pre>. Our surfaces already paint a themed background, and that inline color
+   would show a dark slab inside light presets — override it. Token colors on
+   the inner spans are left untouched, which is the whole point. */
+.shiki,
+.shiki > code {
+	background-color: transparent !important;
+}
+
 /* Shared transition helpers */
 .transition-standard {
 	transition: all var(--dur-med) var(--ease-standard);

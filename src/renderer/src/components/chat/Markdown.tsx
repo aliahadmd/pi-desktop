@@ -7,33 +7,12 @@
  * Element colors are token-driven: headings, lists, tables, quotes, and
  * inline code all read --pi-* variables so every preset styles them.
  */
-import { memo, useEffect, useState, type ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useThemeId } from "../../lib/theme-context";
-import {
-	ensureLanguage,
-	highlight,
-	langFor,
-} from "../../lib/highlight";
-import { shikiThemeFor } from "../../../../shared/theme";
+import { CodeView } from "../common/CodeView";
 
 function CodeBlock({ code, lang }: { code: string; lang: string }): ReactNode {
-	const themeId = useThemeId();
-	const shikiTheme = shikiThemeFor(themeId);
-	const [html, setHtml] = useState<string | null>(null);
-	useEffect(() => {
-		let cancelled = false;
-		const id = langFor(lang);
-		void (async () => {
-			if (!(await ensureLanguage(id))) return;
-			const out = await highlight(code.replace(/\n$/, ""), id, shikiTheme);
-			if (!cancelled) setHtml(out);
-		})().catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [code, lang, shikiTheme]);
 	return (
 		<div className="group/code relative my-2 overflow-hidden rounded-lg border border-app-border bg-app-surface">
 			{lang !== "" && (
@@ -41,16 +20,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }): ReactNode {
 					{lang}
 				</span>
 			)}
-			{html === null ? (
-				<pre className="overflow-x-auto p-3 text-xs text-app-muted">
-					<code>{code}</code>
-				</pre>
-			) : (
-				<div
-					className="overflow-x-auto p-3 [&_pre]:bg-transparent [&_code]:text-xs"
-					dangerouslySetInnerHTML={{ __html: html }}
-				/>
-			)}
+			<CodeView code={code.replace(/\n$/, "")} lang={lang} className="p-3 text-xs" />
 		</div>
 	);
 }

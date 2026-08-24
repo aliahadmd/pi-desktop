@@ -106,6 +106,38 @@ describe("workspace UI", () => {
 			.waitFor({ timeout: 10_000 });
 	}, 60_000);
 
+	it("highlights a source file in the explorer preview", async () => {
+		// Regression guard for code highlighting: opening a .py file must render
+		// shiki token spans carrying real colors, not plain monospace text.
+		// (A preset pointing at an unloaded shiki theme silently produced the
+		// plain fallback before — this catches that class of failure.)
+		await page.getByTestId("topbar-files").click();
+		await page.getByText(os.tmpdir()).first().waitFor({ timeout: 10_000 });
+
+		await page.getByText("src", { exact: true }).first().click();
+		await page.getByText("main.py", { exact: true }).first().click();
+
+		const colors = await page.waitForFunction(
+			() => {
+				const spans = [
+					...document.querySelectorAll<HTMLElement>("span[style*='color']"),
+				];
+				const set = new Set(
+					spans
+						.map((s) => /color\s*:\s*([^;]+)/.exec(s.getAttribute("style") ?? "")?.[1])
+						.filter((c): c is string => c !== undefined),
+				);
+				return set.size >= 2 ? [...set] : false;
+			},
+			undefined,
+			{ timeout: 20_000 },
+		);
+
+		const found = (await colors.jsonValue()) as string[] | false;
+		expect(found).not.toBe(false);
+		expect((found as string[]).length).toBeGreaterThanOrEqual(2);
+	}, 60_000);
+
 	it("toggles the terminal panel without crashing", async () => {
 		await page.getByTestId("topbar-terminal").click();
 		// xterm creates a textarea helper once initialized.

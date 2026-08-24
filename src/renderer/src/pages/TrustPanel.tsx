@@ -3,6 +3,7 @@
  * and render pi keybindings.json (read-only).
  */
 import { useCallback, useEffect, useState } from "react";
+import { CodeView } from "../components/common/CodeView";
 
 interface TrustEntry {
 	path: string;
@@ -157,9 +158,9 @@ export function TrustPanel(): React.JSX.Element {
 								No keybindings.json found — pi defaults are in effect.
 							</p>
 						) : (
-							<pre className="rounded bg-app-bg p-4 font-mono text-[11px] whitespace-pre-wrap text-neutral-300">
-								{keybindings}
-							</pre>
+							<div className="rounded bg-app-bg p-4">
+								<CodeView code={keybindings} lang="json" className="text-[11px]" />
+							</div>
 						)}
 					</>
 				)}
