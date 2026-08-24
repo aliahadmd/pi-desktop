@@ -21,8 +21,28 @@ for strong-isolation patterns (micro-VM, Docker, OpenShell).
 | Preload | `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`; exactly one bridge object exposed |
 | Navigation | `will-navigate` locked to dev server (dev only); window.open denied; external links open in system browser via `shell.openExternal` (http/https only from markdown) |
 | Permissions | All Chromium permission requests/checks denied |
-| Filesystem UI | Explorer/terminal scoped to registered project roots with realpath-canonicalized containment checks (symlink escapes rejected); unit-tested adversarially |
+| Filesystem UI | Explorer/editor scoped to registered project roots with realpath-canonicalized containment checks (symlink escapes rejected); unit-tested adversarially |
 | Sidecar | Loopback-only bind, per-boot token header required; owns only its FTS tables; core tables read-only |
+
+### Filesystem writes (workspace editor)
+
+`fs.write` is the only path from the renderer to a file on disk, and it is
+deliberately narrow:
+
+- **Containment**: the target is canonicalized with `realpath` and must resolve
+  inside a registered project root, so a symlink inside the project that points
+  outside is rejected rather than followed (`tests/unit/fs-write.test.ts`).
+- **No creation**: it overwrites existing files only. The editor saves what the
+  explorer opened; it is not a general file-creation primitive.
+- **Atomic**: content is written to a temp file in the same directory and
+  renamed over the original, so a crash mid-write cannot truncate the file.
+- **Bounded**: 1MB ceiling, enforced in the schema and again in the bridge; a
+  truncated read (over the limit) disables saving in the UI so the tail of a
+  large file can never be silently deleted.
+- **Mode-gated**: Plan mode blocks saves exactly as it blocks the agent's
+  writes — the window cannot both enforce and ignore the permission ladder.
+  Other modes allow the save without a second prompt, since ⌘S is already an
+  explicit user action.
 
 ### Secrets handling
 

@@ -642,9 +642,32 @@ export const fsListRequestSchema = Type.Object({
 	dirPath: Type.String({ minLength: 1 }),
 });
 
+/**
+ * Ceiling on editor saves. Matches FileBridge's read cap (1_000_000 bytes) with
+ * headroom for multi-byte characters: the schema counts UTF-16 code units, the
+ * bridge counts bytes, and the bridge is the authority that rejects oversize.
+ */
+export const FS_WRITE_MAX_CHARS = 1_000_000;
+
 export const fsReadRequestSchema = Type.Object({
 	type: Type.Literal("fs.read"),
 	filePath: Type.String({ minLength: 1 }),
+});
+
+/**
+ * Write a file from the workspace editor.
+ *
+ * The only write path the renderer has into the filesystem. Containment is
+ * enforced in the main process by the same realpath-canonicalized root check
+ * that guards reads (FileBridge.assertRealScoped) — never trust `filePath`.
+ * `sessionId` names the session whose permission mode gates the save, so Plan
+ * mode blocks manual edits exactly as it blocks agent writes.
+ */
+export const fsWriteRequestSchema = Type.Object({
+	type: Type.Literal("fs.write"),
+	filePath: Type.String({ minLength: 1 }),
+	content: Type.String({ maxLength: FS_WRITE_MAX_CHARS }),
+	sessionId: Type.Optional(Type.String()),
 });
 
 export const workspaceRootsRequestSchema = Type.Object({
@@ -879,6 +902,7 @@ export const piRequestSchemas = {
 	"session.default_model": sessionDefaultModelRequestSchema,
 	"fs.list": fsListRequestSchema,
 	"fs.read": fsReadRequestSchema,
+	"fs.write": fsWriteRequestSchema,
 	"workspace.roots": workspaceRootsRequestSchema,
 	"sidecar.search": sidecarSearchRequestSchema,
 	"sidecar.usage": sidecarUsageRequestSchema,
@@ -982,6 +1006,7 @@ export interface PiResponseMap {
 	"session.default_model": null;
 	"fs.list": { entries: Array<{ name: string; type: "dir" | "file"; size: number }> };
 	"fs.read": { content: string; truncated: boolean };
+	"fs.write": { bytes: number };
 	"workspace.roots": { roots: string[] };
 	"sidecar.search": { hits: SidecarSearchHit[] } | null;
 	"sidecar.usage": JsonValue | null;

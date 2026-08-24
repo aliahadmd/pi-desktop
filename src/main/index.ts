@@ -25,7 +25,7 @@ import { StoreService } from "./store/service";
 import { FileBridge } from "./fs-bridge";
 import * as gitService from "./git-service";
 import { permissionExtensionMarker } from "./pi/service";
-import { setDefaultMode } from "./pi/permissions";
+import { getDefaultMode, getMode, setDefaultMode } from "./pi/permissions";
 import {
 	DEFAULT_PERMISSION_MODE,
 	isPermissionMode,
@@ -178,6 +178,25 @@ app.whenReady()
 		});
 		router.handle("fs.read", async (req) => {
 			return await bridge.readFile(req.filePath);
+		});
+		router.handle("fs.write", async (req) => {
+			// Plan mode is read-only research: it blocks the agent's writes, so
+			// it blocks the editor's too. Letting a manual save through would
+			// make the same window both enforce and ignore the mode. Every
+			// other mode allows it — this save is explicit and user-initiated,
+			// so re-prompting for approval would only add a second click.
+			const mode =
+				req.sessionId !== undefined && req.sessionId !== ""
+					? getMode(req.sessionId)
+					: getDefaultMode();
+			if (mode === "plan") {
+				throw new Error(
+					"Plan mode is read-only — switch modes in the composer to save file edits."
+				);
+			}
+			const result = await bridge.writeFile(req.filePath, req.content);
+			log.info("main", `wrote ${result.bytes} bytes to ${req.filePath}`);
+			return result;
 		});
 		router.handle("workspace.roots", () => ({ roots: bridge.getRoots() }));
 		router.handle("git.context", async (req) => {

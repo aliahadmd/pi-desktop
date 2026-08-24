@@ -1,17 +1,28 @@
 /**
  * Workspace dock for the chat view: file explorer, review queue, commands.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
 	Check,
 	ChevronDown,
 	ChevronRight,
+	Save,
 	SquareArrowOutUpRight,
 	X,
 } from "lucide-react";
 import { Markdown } from "../chat/Markdown";
-import { AutoOutput, CodeView } from "../common/CodeView";
+import { AutoOutput } from "../common/CodeView";
+import { useSessions } from "../../stores/pi-sessions";
 import { parseArgumentHintFromHint } from "../../lib/command-hints";
+
+/**
+ * CodeMirror is ~650kB and only ever renders once a file is opened in the
+ * explorer, so it loads on demand rather than riding in the main chunk —
+ * the same treatment shiki's grammars already get.
+ */
+const CodeEditor = lazy(async () => ({
+	default: (await import("../common/CodeEditor")).CodeEditor,
+}));
 
 // ---------------------------------------------------------------------------
 // File explorer (read-only, scoped to session cwd)
@@ -93,8 +104,13 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 	const [listings, setListings] = useState<Map<string, FsEntry[]>>(new Map());
 	const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
 	const [fileContent, setFileContent] = useState<{ path: string; content: string } | null>(null);
+	/** Live editor buffer; null when it matches what was loaded from disk. */
+	const [draft, setDraft] = useState<string | null>(null);
+	const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+	const [truncated, setTruncated] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const cacheRef = useRef<ListingCache>(makeCache());
+	const activeSessionId = useSessions((s) => s.activeId);
 
 	const loadDir = useCallback(
 		async (dir: string): Promise<void> => {
@@ -137,10 +153,48 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 		const result = await window.piDesktop.invoke({ type: "fs.read", filePath: full });
 		if (result.ok) {
 			setFileContent({ path: full, content: result.data.content });
+			setDraft(null);
+			setSaveState("idle");
+			setTruncated(result.data.truncated);
+			setError(null);
 		} else {
 			setError(result.error.message);
 		}
 	}
+
+	/**
+	 * Persist the editor buffer. Saving a truncated read is refused: the
+	 * renderer only holds the first megabyte, so writing it back would silently
+	 * delete the rest of the file.
+	 */
+	const saveFile = useCallback(async (): Promise<void> => {
+		if (fileContent === null || draft === null) return;
+		if (truncated) {
+			setError("File is too large to edit safely — only the first part was loaded.");
+			return;
+		}
+		setSaveState("saving");
+		const result = await window.piDesktop.invoke({
+			type: "fs.write",
+			filePath: fileContent.path,
+			content: draft,
+			...(activeSessionId !== null ? { sessionId: activeSessionId } : {}),
+		});
+		if (result.ok) {
+			// The draft is now what is on disk: clearing it drops the dirty
+			// marker and makes the next open start clean.
+			setFileContent({ path: fileContent.path, content: draft });
+			setDraft(null);
+			setError(null);
+			setSaveState("saved");
+			window.setTimeout(() => {
+				setSaveState((s) => (s === "saved" ? "idle" : s));
+			}, 1500);
+		} else {
+			setError(result.error.message);
+			setSaveState("idle");
+		}
+	}, [activeSessionId, draft, fileContent, truncated]);
 
 	function openInEditor(path: string): void {
 		void window.piDesktop
@@ -206,18 +260,68 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 			{error !== null && <div className="px-3 py-2 text-[10px] text-danger">{error}</div>}
 			<div className="flex-1 overflow-y-auto py-1">{renderDir(cwd, 0)}</div>
 			{fileContent !== null && (
-				<div className="h-1/2 overflow-auto border-t border-neutral-800 bg-app-bg p-3">
-					<div className="mb-1 flex items-center justify-between">
-						<span className="font-mono text-[10px] text-neutral-500">{fileContent.path}</span>
-						<button
-							type="button"
-							onClick={() => setFileContent(null)}
-							className="text-[10px] text-neutral-500 hover:text-neutral-300"
-						>
-							close
-						</button>
+				<div className="flex h-1/2 flex-col border-t border-app-border bg-app-bg">
+					<div className="flex items-center justify-between gap-2 px-3 py-1.5">
+						<span className="truncate font-mono text-[10px] text-app-muted">
+							{fileContent.path}
+							{draft !== null && <span className="ml-1 text-warning-strong">●</span>}
+						</span>
+						<div className="flex shrink-0 items-center gap-1">
+							{truncated && (
+								<span className="text-[10px] text-warning-strong" title="Only the first part of this file was loaded; saving is disabled.">
+									truncated
+								</span>
+							)}
+							{saveState === "saved" && (
+								<span className="text-[10px] text-success-strong">saved</span>
+							)}
+							<button
+								type="button"
+								onClick={() => void saveFile()}
+								disabled={draft === null || truncated || saveState === "saving"}
+								title="Save (⌘S)"
+								aria-label="Save file"
+								className="rounded p-1 text-app-muted hover:bg-app-surface2 hover:text-app-text disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-app-muted"
+							>
+								<Save size={12} strokeWidth={2} />
+							</button>
+							<button
+								type="button"
+								onClick={() => {
+									setFileContent(null);
+									setDraft(null);
+									setTruncated(false);
+								}}
+								title="Close"
+								aria-label="Close file"
+								className="rounded p-1 text-app-muted hover:bg-app-surface2 hover:text-app-text"
+							>
+								<X size={12} strokeWidth={2} />
+							</button>
+						</div>
 					</div>
-					<CodeView code={fileContent.content} lang={fileContent.path} className="text-[11px]" />
+					<div className="min-h-0 flex-1 px-1 pb-1">
+						<Suspense
+							fallback={
+								<pre className="overflow-auto px-2 font-mono text-[11px] whitespace-pre-wrap text-app-muted">
+									{fileContent.content}
+								</pre>
+							}
+						>
+							<CodeEditor
+								key={fileContent.path}
+								value={fileContent.content}
+								lang={fileContent.path}
+								readOnly={truncated}
+								onChange={(next: string) => {
+									// Dirty only when it actually differs from disk;
+									// typing and undoing back should clear the marker.
+									setDraft(next === fileContent.content ? null : next);
+								}}
+								onSave={() => void saveFile()}
+							/>
+						</Suspense>
+					</div>
 				</div>
 			)}
 		</div>

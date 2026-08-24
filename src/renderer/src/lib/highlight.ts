@@ -53,6 +53,16 @@ async function getHighlighter(): Promise<Highlighter> {
 	return shikiHighlighter;
 }
 
+/**
+ * The shared highlighter instance, for surfaces that tokenize themselves
+ * instead of asking for HTML — CodeEditor feeds it to codemirror-shiki so the
+ * editor colors code with the same grammars, themes, and engine as chat code
+ * blocks and the file preview. One highlighter, one set of colors everywhere.
+ */
+export async function getSharedHighlighter(): Promise<Highlighter> {
+	return getHighlighter();
+}
+
 /** File-extension → shiki language id. */
 const EXT_TO_LANG: Record<string, BundledLanguage> = {
 	ts: "typescript",

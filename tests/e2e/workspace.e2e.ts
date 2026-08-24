@@ -4,7 +4,7 @@
  */
 import { _electron } from "playwright-core";
 import { execSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -111,6 +111,8 @@ describe("workspace UI", () => {
 		// shiki token spans carrying real colors, not plain monospace text.
 		// (A preset pointing at an unloaded shiki theme silently produced the
 		// plain fallback before — this catches that class of failure.)
+		// The preview is now a CodeMirror editor whose tokens are decorated
+		// from the SAME shiki highlighter, so the assertion still holds.
 		await page.getByTestId("topbar-files").click();
 		await page.getByText(os.tmpdir()).first().waitFor({ timeout: 10_000 });
 
@@ -137,6 +139,59 @@ describe("workspace UI", () => {
 		expect(found).not.toBe(false);
 		expect((found as string[]).length).toBeGreaterThanOrEqual(2);
 	}, 60_000);
+
+	it("edits a file in the explorer and saves it back to disk", async () => {
+		// The whole point of the editor: type, save, and have the bytes land.
+		// Proves the CodeMirror surface is genuinely editable (not a styled
+		// <pre>), that ⌘S reaches fs.write, and that the write is contained.
+		const target = path.join(projectDir, "src", "main.py");
+		// topbar-files is a TOGGLE: the previous test left the dock open, so
+		// clicking it again would close it and hide the whole tree. Only open
+		// it when the explorer is not already showing.
+		if ((await page.getByText("main.py", { exact: true }).count()) === 0) {
+			await page.getByTestId("topbar-files").click();
+			await page.getByText(os.tmpdir()).first().waitFor({ timeout: 10_000 });
+			if ((await page.getByText("main.py", { exact: true }).count()) === 0) {
+				await page.getByText("src", { exact: true }).first().click();
+			}
+		}
+		await page.getByText("main.py", { exact: true }).first().click();
+
+		const editor = page.locator(".cm-content").first();
+		await editor.waitFor({ timeout: 20_000 });
+		expect(await editor.getAttribute("contenteditable")).toBe("true");
+
+		await editor.click();
+		await page.keyboard.press("End");
+		await page.keyboard.type("\nprint('edited by e2e')");
+
+		// Dirty marker enables the save button; ⌘S is the primary path.
+		const save = page.getByLabel("Save file");
+		await save.waitFor({ timeout: 5_000 });
+		await page.keyboard.press("ControlOrMeta+s");
+
+		await expect
+			.poll(() => readFileSync(target, "utf8"), { timeout: 15_000 })
+			.toContain("edited by e2e");
+
+		// Original content survives — this was an edit, not an overwrite.
+		expect(readFileSync(target, "utf8")).toContain("print('hi')");
+	}, 60_000);
+
+	it("rejects a write outside the registered project roots", async () => {
+		// The containment rule enforced at the IPC boundary, exercised through
+		// the real bridge rather than a unit-level FileBridge call.
+		const escape = path.join(os.tmpdir(), `pidesktop-escape-${process.pid}.txt`);
+		writeFileSync(escape, "untouched");
+		const result = await invoke({
+			type: "fs.write",
+			filePath: escape,
+			content: "pwned",
+		});
+		expect(result.ok).toBe(false);
+		expect(readFileSync(escape, "utf8")).toBe("untouched");
+		rmSync(escape, { force: true });
+	}, 20_000);
 
 	it("toggles the terminal panel without crashing", async () => {
 		await page.getByTestId("topbar-terminal").click();

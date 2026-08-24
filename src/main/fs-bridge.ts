@@ -1,9 +1,12 @@
 /**
- * Safe filesystem bridge for the workspace explorer (read-only, chapter 7).
+ * Safe filesystem bridge for the workspace explorer.
  *
  * All paths must resolve inside a registered project root; traversal outside
- * is rejected. Known-heavy directories are filtered from listings.
+ * is rejected. Known-heavy directories are filtered from listings. Reads were
+ * the only operation until the workspace editor added `writeFile`, which is
+ * held to the same containment rule.
  */
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -20,6 +23,7 @@ const DENY_LIST = new Set([
 ]);
 
 const MAX_READ_BYTES = 1_000_000;
+const MAX_WRITE_BYTES = 1_000_000;
 const MAX_LIST_ENTRIES = 2_000;
 
 export interface FsEntry {
@@ -123,5 +127,46 @@ export class FileBridge {
 			content: content.slice(0, MAX_READ_BYTES),
 			truncated: stat.size > MAX_READ_BYTES,
 		};
+	}
+
+	/**
+	 * Overwrite an existing file inside a registered root.
+	 *
+	 * Containment uses the same realpath canonicalization as reads, so a
+	 * symlink pointing outside the project is rejected rather than followed.
+	 * Deliberately refuses to create new files: the editor only saves what the
+	 * explorer opened, which keeps this from becoming a general write primitive
+	 * (`assertRealScoped` throws on a missing target anyway).
+	 *
+	 * The write is atomic — content goes to a temp file in the same directory
+	 * and is renamed over the original. A crash or full disk mid-write leaves
+	 * the original file intact instead of truncated.
+	 */
+	async writeFile(filePath: string, content: string): Promise<{ bytes: number }> {
+		const scoped = await this.assertRealScoped(filePath);
+		const stat = await fs.stat(scoped);
+		if (!stat.isFile()) throw new Error(`not a file: ${filePath}`);
+
+		const bytes = Buffer.byteLength(content, "utf8");
+		if (bytes > MAX_WRITE_BYTES) {
+			throw new Error(
+				`file too large to save: ${bytes} bytes exceeds the ${MAX_WRITE_BYTES} byte limit`
+			);
+		}
+
+		// Same directory keeps the rename on one filesystem (cross-device
+		// rename fails with EXDEV) and inherits the directory's permissions.
+		const tmp = path.join(
+			path.dirname(scoped),
+			`.${path.basename(scoped)}.pidesktop-${randomUUID().slice(0, 8)}.tmp`
+		);
+		try {
+			await fs.writeFile(tmp, content, { encoding: "utf8", mode: stat.mode });
+			await fs.rename(tmp, scoped);
+		} catch (err) {
+			await fs.rm(tmp, { force: true }).catch(() => undefined);
+			throw err;
+		}
+		return { bytes };
 	}
 }

@@ -40,13 +40,14 @@ The architecture has three layers:
 | `src/renderer/src/lib/apply-theme.ts` | Writes preset tokens to the DOM as `--pi-*` variables |
 | `src/renderer/src/lib/ingest.ts` | Pure event→transcript logic (rAF-batched streaming) |
 | `src/renderer/src/stores/pi-sessions.ts` | Zustand store: session registry, event routing |
+| `src/renderer/src/components/common/CodeEditor.tsx` | Editable CodeMirror 6 surface; shiki-decorated, lazy-loaded |
 
 ## Testing & verification
 
 ```bash
 npm run typecheck          # strict TS across all configs
-npm test                   # 173 unit tests, 27 files (vitest)
-npm run e2e                # 31 e2e tests (Playwright _electron)
+npm test                   # 191 unit tests, 29 files (vitest)
+npm run e2e                # 33 e2e tests (Playwright _electron)
 cd sidecar && uv run pytest -q   # 14 pytest
 cd sidecar && uv run mypy app/   # strict type check
 ./scripts/check-secrets.sh       # credential scan
@@ -149,9 +150,9 @@ Remediated in `6dcb187` along with H-2, M-1, M-2 and M-7.
 | | |
 |---|---|
 | Phases complete | 1–7 (chapters 1–33) |
-| IPC channels | 80, all typebox-validated |
-| Gates | typecheck clean · 173 unit (27 files) · 31 e2e · 14 sidecar pytest |
-| Source | ~15.9k lines TS/TSX |
+| IPC channels | 81, all typebox-validated |
+| Gates | typecheck clean · 191 unit (29 files) · 33 e2e · 14 sidecar pytest |
+| Source | ~16.2k lines TS/TSX |
 | Pi version | pinned exactly at `0.84.2` |
 
 Open items carried forward from audit 5: H-3 (deleting a session file under a
@@ -204,7 +205,7 @@ icon by matching `PERMISSION_BLOCK_REASONS` from `src/shared/pi.ts`.
 ## For a new coding agent picking this up
 
 1. Read `docs/security.md` first (threat model, boundaries).
-2. Read `src/shared/pi.ts` — all 80 IPC channels are defined there with their
+2. Read `src/shared/pi.ts` — all 81 IPC channels are defined there with their
    schemas. This is your map of what the app can do.
 3. Read `AGENTS.md` for the working rulebook (gates, conventions, process).
 4. Read `docs/chapter*-status.md` for phase-1 implementation details, and

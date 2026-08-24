@@ -7,7 +7,7 @@ this file is the working rulebook. Read both before changing anything.
 ## Read in this order
 
 1. `docs/security.md` — threat model and trust boundaries. Never weaken them.
-2. `src/shared/pi.ts` — every IPC channel with its typebox schema (80 today).
+2. `src/shared/pi.ts` — every IPC channel with its typebox schema (81 today).
    This is the map of what the app can do.
 3. `aboutproject.md` — why the architecture is what it is.
 4. `pibugs/` — audit findings and their remediation state; five audits, with
@@ -20,8 +20,8 @@ this file is the working rulebook. Read both before changing anything.
 
 ```bash
 npm run typecheck   # strict TS, exactOptionalPropertyTypes
-npm test            # vitest unit suite (27 files, 173 passing as of 2026-08-25)
-npm run e2e         # Playwright _electron, 31 tests; builds and stages itself
+npm test            # vitest unit suite (29 files, 191 passing as of 2026-08-25)
+npm run e2e         # Playwright _electron, 33 tests; builds and stages itself
 npm audit --omit=dev && ./scripts/check-secrets.sh
 cd sidecar && uv run pytest -q && uv run mypy app/   # 14 passing
 ```
