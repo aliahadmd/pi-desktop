@@ -144,13 +144,18 @@ export default function ChatPage({
 		return () => clearTimeout(t);
 	}, [dockWidth]);
 
-	// ⌘J toggles the Terminal dock tab; ⌘K opens the command palette.
+	// ⌘J toggles the Terminal dock tab; ⌘K opens the command palette; Esc
+	// closes the open dock panel (the panel has no header of its own).
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
 			const key = e.key.toLowerCase();
 			if ((e.metaKey || e.ctrlKey) && key === "j") {
 				e.preventDefault();
 				setDockTab((prev: DockTab) => (prev === "terminal" ? null : "terminal"));
+			}
+			if (key === "escape" && dockTab !== null) {
+				e.preventDefault();
+				setDockTab(null);
 			}
 			if ((e.metaKey || e.ctrlKey) && key === "k") {
 				e.preventDefault();
@@ -159,14 +164,10 @@ export default function ChatPage({
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, []);
+	}, [dockTab, setDockTab]);
 
 	const sessionList = Object.values(sessions);
 	const active = activeId !== null ? sessions[activeId] : undefined;
-	const reviewCount =
-		active?.blocks.filter(
-			(b) => b.kind === "tool" && ["edit", "write"].includes(b.toolName)
-		).length ?? 0;
 
 	// Thinking levels supported by the active model; re-fetched when it changes.
 	useEffect(() => {
@@ -346,33 +347,11 @@ export default function ChatPage({
 								animate={{ width: `${dockWidth}px`, opacity: 1 }}
 								exit={{ width: 0, opacity: 0 }}
 								transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }}
-								className="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-neutral-800"
-							>
-								<div className="flex h-8 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
-									{(["files", "review", "commands", "tree", "terminal"] as const).map((t) => (
-										<button
-											key={t}
-											type="button"
-											onClick={() => setDockTab(t)}
-											className={`rounded px-2 py-0.5 text-[10px] capitalize ${
-												dockTab === t
-													? "bg-neutral-800 text-neutral-100"
-													: "text-neutral-500 hover:text-neutral-300"
-											}`}
-										>
-											{t === "review" ? `Review (${reviewCount})` : t}
-										</button>
-									))}
-									<button
-										type="button"
-										onClick={() => setDockTab(null)}
-										className="ml-auto px-1.5 text-neutral-600 hover:text-neutral-300"
-										aria-label="Close panel"
-									>
-										<X size={12} strokeWidth={2} />
-									</button>
-								</div>
-								<div className="min-h-0 flex-1 overflow-y-auto">
+									className="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-neutral-800"
+								>
+									{/* No panel header: the top bar's action icons own
+									    switching and closing (Esc also closes). */}
+									<div className="min-h-0 flex-1 overflow-y-auto">
 									{dockTab === "files" && <FileExplorer cwd={active.cwd} />}
 									{dockTab === "review" && <ReviewQueue blocks={active.blocks} />}
 									{dockTab === "commands" && (

@@ -52,8 +52,24 @@ export function TopBar({
 			className="flex h-10 shrink-0 items-center border-b border-neutral-800 bg-neutral-950/80"
 			data-testid="top-bar"
 		>
-			{/* Drag region clear of the macOS traffic lights (x:16,y:16). */}
-			<span className="titlebar-drag ml-[72px] h-full min-w-0 flex-1" aria-hidden="true" />
+			{/* Sidebar toggle: FIXED left position, clear of the macOS traffic
+			    lights (x:16,y:16). Layout controls live here permanently. */}
+			<button
+				type="button"
+				title={sidebarHidden ? "Show sidebar (⌘\)" : "Hide sidebar (⌘\)"}
+				data-testid="topbar-sidebar-toggle"
+				aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+				onClick={onToggleSidebar}
+				className={`ml-[72px] rounded p-1.5 transition-colors hover:bg-neutral-800 ${
+					sidebarHidden ? "text-blue-400" : "text-neutral-400 hover:text-neutral-200"
+				}`}
+			>
+				<PanelLeft size={15} strokeWidth={2} />
+			</button>
+			<span
+				className="titlebar-drag h-full min-w-0 flex-1"
+				aria-hidden="true"
+			/>
 
 			{hasSession && (
 				<div className="flex shrink-0 items-center gap-0.5">
@@ -111,23 +127,6 @@ export function TopBar({
 				</div>
 			)}
 
-			{/* Sidebar toggle always last (far right) — a layout control, kept
-			    separate from session actions by a divider when both are visible. */}
-			<div
-				className={`mx-2 h-4 ${hasSession ? "" : "ml-auto"} w-px bg-neutral-700`}
-			/>
-			<button
-				type="button"
-				title={sidebarHidden ? "Show sidebar (⌘\)" : "Hide sidebar (⌘\)"}
-				data-testid="topbar-sidebar-toggle"
-				aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-				onClick={onToggleSidebar}
-				className={`mr-2 rounded p-1.5 transition-colors hover:bg-neutral-800 ${
-					sidebarHidden ? "text-blue-400" : "text-neutral-400 hover:text-neutral-200"
-				}`}
-			>
-				<PanelLeft size={15} strokeWidth={2} />
-			</button>
 		</div>
 	);
 }
