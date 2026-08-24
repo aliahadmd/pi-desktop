@@ -1,13 +1,9 @@
 /**
  * Top application bar (phase 6 UX): always visible, spans the window.
  *
- * Left: sidebar show/hide toggle, clear of the macOS traffic lights.
- * Right: session action icons (dock toggles + compact + exports).
- * Middle: window drag region.
- *
- * Follows VS Code: layout controls left, per-session actions right, drag
- * region between. A hidden sidebar leaves ZERO trace — restoration lives
- * here, not in leftover rail chrome.
+ * Left: window drag region (clear of the macOS traffic lights).
+ * Right: session action icons + sidebar show/hide toggle.
+ * A hidden sidebar leaves ZERO trace — restoration lives here.
  */
 import {
 	FileJson,
@@ -49,14 +45,6 @@ export function TopBar({
 	onCompact(): void;
 	onExport(format: "html" | "jsonl"): void;
 }): React.JSX.Element {
-	const dockActions = [
-		{ tab: "files" as const, Icon: FolderOpen, title: "Files" },
-		{ tab: "review" as const, Icon: Search, title: `Review (${String(reviewCount)})` },
-		{ tab: "commands" as const, Icon: SquareSlash, title: "Commands" },
-		{ tab: "tree" as const, Icon: Network, title: "Tree" },
-		{ tab: "terminal" as const, Icon: SquareTerminal, title: "Terminal" },
-	];
-
 	const hasSession = activeSessionId !== null;
 
 	return (
@@ -64,25 +52,12 @@ export function TopBar({
 			className="flex h-10 shrink-0 items-center border-b border-neutral-800 bg-neutral-950/80"
 			data-testid="top-bar"
 		>
-			{/* Clear the macOS traffic lights (trafficLightPosition x:16,y:16). */}
-			<button
-				type="button"
-				title={sidebarHidden ? "Show sidebar (⌘\)" : "Hide sidebar (⌘\)"}
-				data-testid="topbar-sidebar-toggle"
-				aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-				onClick={onToggleSidebar}
-				className={`ml-[72px] rounded p-1.5 transition-colors hover:bg-neutral-800 ${
-					sidebarHidden ? "text-blue-400" : "text-neutral-400 hover:text-neutral-200"
-				}`}
-			>
-				<PanelLeft size={15} strokeWidth={2} />
-			</button>
-
-			<span className="titlebar-drag h-full min-w-0 flex-1" aria-hidden="true" />
+			{/* Drag region clear of the macOS traffic lights (x:16,y:16). */}
+			<span className="titlebar-drag ml-[72px] h-full min-w-0 flex-1" aria-hidden="true" />
 
 			{hasSession && (
-				<div className="flex shrink-0 items-center gap-0.5 pr-3">
-					{dockActions.map(({ tab, Icon, title }) => (
+				<div className="flex shrink-0 items-center gap-0.5">
+					{dockActions(reviewCount).map(({ tab, Icon, title }) => (
 						<button
 							key={tab}
 							type="button"
@@ -135,7 +110,38 @@ export function TopBar({
 					</button>
 				</div>
 			)}
-			{!hasSession && <span className="w-3 shrink-0" />}
+
+			{/* Sidebar toggle always last (far right) — a layout control, kept
+			    separate from session actions by a divider when both are visible. */}
+			<div
+				className={`mx-2 h-4 ${hasSession ? "" : "ml-auto"} w-px bg-neutral-700`}
+			/>
+			<button
+				type="button"
+				title={sidebarHidden ? "Show sidebar (⌘\)" : "Hide sidebar (⌘\)"}
+				data-testid="topbar-sidebar-toggle"
+				aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+				onClick={onToggleSidebar}
+				className={`mr-2 rounded p-1.5 transition-colors hover:bg-neutral-800 ${
+					sidebarHidden ? "text-blue-400" : "text-neutral-400 hover:text-neutral-200"
+				}`}
+			>
+				<PanelLeft size={15} strokeWidth={2} />
+			</button>
 		</div>
 	);
+}
+
+function dockActions(reviewCount: number): Array<{
+	tab: Exclude<TopBarDockTab, null>;
+	Icon: typeof FolderOpen;
+	title: string;
+}> {
+	return [
+		{ tab: "files", Icon: FolderOpen, title: "Files" },
+		{ tab: "review", Icon: Search, title: `Review (${String(reviewCount)})` },
+		{ tab: "commands", Icon: SquareSlash, title: "Commands" },
+		{ tab: "tree", Icon: Network, title: "Tree" },
+		{ tab: "terminal", Icon: SquareTerminal, title: "Terminal" },
+	];
 }
