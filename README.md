@@ -1,38 +1,40 @@
 # Pi Desktop
 
-macOS Electron client for the [Pi coding agent](../pi/README.md). Built chapter-by-chapter
-according to [../piplan/Phase-1/main.md](../piplan/Phase-1/main.md).
+macOS Electron client for the [Pi coding agent](../pi/README.md) — session management,
+streaming chat, file attachments, an embedded terminal, a package marketplace, and
+usage analytics, without losing any of pi's capability.
+
+See [aboutproject.md](aboutproject.md) for the architecture narrative and full
+timeline, and [AGENTS.md](AGENTS.md) for the working rulebook.
 
 ## Status
 
-- **Chapter 1 — Foundation: complete** ([docs/chapter1-status.md](docs/chapter1-status.md))
-- **Chapter 2 — Pi integration core: complete** ([docs/chapter2-status.md](docs/chapter2-status.md))
-  Both backends (in-process SDK + `pi --mode rpc` subprocess) drive real pi sessions
-  end-to-end through the typed IPC layer; verified by unit contract tests and e2e.
-- **Chapters 3+4 — Chat UI & Sessions/SQLite: complete** ([docs/chapter3-4-status.md](docs/chapter3-4-status.md))
-  Streaming chat with tool/diff/thinking rendering, session tabs, SQLite-backed session
-  browser with usage tracking and live cost rollups.
-- **Chapter 5 — Python sidecar: complete** ([docs/chapter5-status.md](docs/chapter5-status.md))
-  FastAPI sidecar owns FTS5 full-text search + analytics over the shared DB; loopback-only
-  with per-boot token auth; app degrades gracefully when it is not running.
-- **Chapter 6 — Models, auth & settings: complete** ([docs/chapter6-status.md](docs/chapter6-status.md))
-  Provider auth management with Keychain-backed API keys (safeStorage), OAuth login
-  flows, model catalog with pricing, pi settings editor, first-run onboarding.
-- **Chapter 7 — Workspace & power features: complete** ([docs/chapter7-status.md](docs/chapter7-status.md))
-  File explorer (symlink-safe, root-scoped), diff review queue, embedded xterm terminal
-  (node-pty), commands browser, tray + native menus + completion notifications, and a
-  bundled approval extension (confirm-before-apply via pi's public extension API);
-  on by default and user-disableable in Settings, SDK-mode sessions only.
-- **Chapter 8 — Hardening & release: complete** ([docs/chapter8-status.md](docs/chapter8-status.md))
-  IPC fuzzing (found+fixed a real crash), secrets scanning, dependency audits clean,
-  auto-update wiring, PyInstaller sidecar binary, CI + signed/notarized release
-  pipelines, golden-path e2e.
+**Phases 1–7 complete (chapters 1–33)** · master `6dcb187` · pi pinned at `0.84.2`
+
+| Phase | Scope | Detail |
+|---|---|---|
+| 1 (ch 1–8) | Foundation → release pipeline: typed IPC, SDK + RPC backends, chat UI, SQLite persistence, Python sidecar, models/auth/settings, workspace features, hardening | [chapter status docs](docs/) |
+| 2 (ch 9–13) | Advanced pi features: session trees, providers deep, skills/packages/prompt templates, desktop tools, compaction + trust UI | `piplan/Phase-2/STATUS.md` |
+| 3 (ch 14–18) | UI/UX redesign: three-column layout, sessions sidebar, composer v2, grouped tool rows, motion system | `piplan/Phase-3/STATUS.md` |
+| 4 (ch 19–24) | Stability, attachments, icon dock, embedded terminal, sound system | `piplan/Phase-4/STATUS.md` |
+| 5 (ch 25–27) | Permission modes: the five-mode autonomy ladder with live per-session state | `piplan/Phase-5/STATUS.md` |
+| 6 (ch 28–30) | Projects: pinning, sort, create/open, sidebar project rows, top app bar | `piplan/Phase-6/STATUS.md` |
+| 7 (ch 31–33) | Appearance: theme engine (5 presets incl. light), UI scale, transparency, theme-aware syntax highlighting, richer history rows | `piplan/Phase-7/STATUS.md` |
+
+Verification at this commit: typecheck clean · **173 unit** tests (27 files) ·
+**31 e2e** · **14 sidecar pytest**.
+
+Five audit cycles are recorded in `pibugs/`; open items from the latest are
+listed under "Current state" in [aboutproject.md](aboutproject.md).
+
+> `piplan/` and `pibugs/` are gitignored working directories — present locally,
+> not part of the published tree.
 
 ## Docs
 
 | Doc | Purpose |
 |---|---|
-| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, boundaries, secrets handling |
+| [docs/security.md](docs/security.md) | Threat model, boundaries, secrets handling |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | Exactly what leaves your machine |
 | [docs/RELEASE.md](docs/RELEASE.md) | Release checklist + rollback |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues (sidecar, keys, search…) |
@@ -81,16 +83,20 @@ node node_modules/esbuild/install.js && node node_modules/electron/install.js
 ## Layout
 
 ```
-src/shared/    IPC contract (types + typebox schemas) — no electron/node imports
-src/main/      Main process: router, event bus, services, window
+src/shared/    IPC contract (80 channels: types + typebox schemas), theme presets
+               — no electron/node imports
+src/main/      Main process: router, event bus, pi backends, store, sidecar mgr
 src/preload/   contextBridge surface (window.piDesktop)
-src/renderer/  React 19 + Tailwind 4 UI
-tests/unit/    vitest unit tests
-tests/e2e/     Playwright _electron smoke tests
-docs/          security.md and per-chapter notes
+src/renderer/  React 19 + Tailwind 4 UI (pages, components, zustand stores)
+sidecar/       Python FastAPI service: FTS5 search + analytics
+tests/unit/    vitest unit tests (27 files)
+tests/e2e/     Playwright _electron tests
+docs/          security.md, privacy, release, troubleshooting, ch1–8 status
 ```
 
 ## Native modules
 
-Deferred to their chapters: `better-sqlite3` (ch4), `node-pty` (ch7). Both will require
-`electron-rebuild`; `asarUnpack` entries are pre-staged in `electron-builder.yml`.
+`better-sqlite3` and `node-pty` are compiled against Electron's ABI, with
+`asarUnpack` entries in `electron-builder.yml`. If the terminal fails with
+`posix_spawnp` errors after an Electron or Node upgrade, the ABI no longer
+matches — run `./scripts/setup-native.sh` rather than debugging app code.

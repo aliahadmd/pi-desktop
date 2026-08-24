@@ -35,6 +35,9 @@ The architecture has three layers:
 | `src/main/sidecar/manager.ts` | Python sidecar lifecycle (spawn, health poll, restart) |
 | `sidecar/app/indexer.py` | FTS5 incremental indexer over pi session JSONL files |
 | `src/main/pi/approve-extension.ts` | Approval gate extension (public pi extension API; on by default, SDK mode only) |
+| `src/main/pi/permissions.ts` | Live permission-mode store read synchronously per `tool_call` |
+| `src/shared/theme.ts` | Appearance presets: semantic color tokens (`ThemeVars`) |
+| `src/renderer/src/lib/apply-theme.ts` | Writes preset tokens to the DOM as `--pi-*` variables |
 | `src/renderer/src/lib/ingest.ts` | Pure event→transcript logic (rAF-batched streaming) |
 | `src/renderer/src/stores/pi-sessions.ts` | Zustand store: session registry, event routing |
 
@@ -42,9 +45,9 @@ The architecture has three layers:
 
 ```bash
 npm run typecheck          # strict TS across all configs
-npm test                   # 53 unit tests (vitest)
-npm run e2e                # 30 e2e tests (Playwright _electron)
-cd sidecar && uv run pytest -q   # 11 pytest
+npm test                   # 173 unit tests, 27 files (vitest)
+npm run e2e                # 31 e2e tests (Playwright _electron)
+cd sidecar && uv run pytest -q   # 14 pytest
 cd sidecar && uv run mypy app/   # strict type check
 ./scripts/check-secrets.sh       # credential scan
 npm audit --omit=dev             # dependency audit
@@ -71,8 +74,8 @@ desktop tools (notify/clipboard/open_path custom tools), compaction controls
 (dialog with instructions), trust management UI, keybindings viewer.
 
 ### Bug fix cycles
-Two full audit cycles: `.pibugs/pibugs1.md` (22 findings, phase-1 code) and
-`.pibugs/pibugs2.md` (22 findings, phase-2 code). All fixed. Notable: IPC
+Two full audit cycles: `pibugs/pibugs1.md` (22 findings, phase-1 code) and
+`pibugs/pibugs2.md` (22 findings, phase-2 code). All fixed. Notable: IPC
 credential exposure (C-1), session replacement re-hydration (H-2), trust store
 data corruption (H-1), double extension binding (H-3).
 
@@ -90,21 +93,93 @@ inlining), icon rail dock (Files/Review/Commands/Tree/Terminal icons), sound
 system (Web Audio generated tones for complete/error/sent/notification),
 minimalist sweep (spacing normalization, progressive disclosure).
 
-## What we will do next (Phase 2 plans in `piplan/Phase-2/`)
+### Phase 5 (ch 25–27): Permission modes
+The five-mode autonomy ladder replacing the old `confirmBeforeApply` boolean:
+permission core with live per-session state (`f43a267`), composer ModePicker
+plus a Settings default (`7a3cfe1`), and plan-mode UX with blocked-call
+styling in the transcript (`802d2a0`). Architecture is documented in
+"Permission modes" below. Deviations from plan: the status-bar mode indicator
+was cut (the composer chip is always visible, so a second one was noise), and
+Export became two explicit buttons (HTML / JSONL) rather than a dropdown.
 
-These are planned but not yet implemented:
+### Phase 6 (ch 28–30): Projects, sidebar UX & composer context
+A real project lifecycle on top of pi's "project identity = cwd" model:
+pinning, session counts, and create/open channels (`22aa436`); sidebar project
+rows with per-project actions and a sort menu (`9ff3176`); composer project
+chip (`3ef497a`). The layout then evolved past the plan through feedback: the
+vertical right rail was replaced by a **persistent top app bar** that owns the
+window drag region, the sidebar toggle (left, beside the traffic lights), and
+a right cluster of dock actions plus Compact/Export. Hiding the sidebar now
+removes it entirely (zero width) — no rail remains.
 
-1. **Remote pi-server sessions** — connect to a pi daemon over Unix socket or
+### Phase 7 (ch 31–33): Appearance
+Theme engine with five presets including light modes, driven by a semantic
+CSS-variable token sheet (`a1d8f32`, `04229b4`); UI scale 90–150% via
+`webFrame.setZoomFactor` plus optional window transparency/vibrancy
+(`a3ed61b`); theme-aware shiki highlighting for chat code blocks and the dock
+file preview (`118f197`, `92c66dc`); richer sidebar rows with active-session
+tint and streaming shimmer (`8842124`). Settings was then restructured into a
+grouped two-pane layout with its own section sidebar, and the theme picker
+moved out of the top bar into it (`8fededa`).
+
+This phase also produced the longest debugging tail in the project, worth
+recording because each bug was invisible to green gates: theme tokens never
+reached the DOM at all (camelCase keys written where CSS expects kebab-case,
+`8109386`); syntax highlighting was silently dead everywhere (CSP plus shiki
+config, `f406b66`); and the theme preference never persisted because the
+settings channel expects a JSON-encoded value while the bare id was passed,
+inside a guard that only logged (`3026d47`). The lesson is in AGENTS.md now:
+every color must be a preset token, and `theme-ramp-coverage.test.ts` fails
+the build on any unmapped Tailwind ramp class so this class of regression
+cannot ship silently again.
+
+### Bug fix cycles (continued)
+Five audits total, in `pibugs/`. Audits 3–5 followed the same method as 1–2:
+direct read of every source file, with every cross-boundary claim diffed
+against the cloned upstream monorepo. Audit 5 (`pibugs5.md`, 18 findings
+against `3026d47`) identified a **layering and ownership** theme — features
+whose guarantees break once a second instance exists (two sessions, stacked
+overlays, a second theme). Its H-1 was security-relevant: one shared
+permission extension resolved every `tool_call` against the most recently
+opened session, so with two tabs open plan mode could be silently escaped.
+Remediated in `6dcb187` along with H-2, M-1, M-2 and M-7.
+
+## Current state (2026-08-25, master `6dcb187`)
+
+| | |
+|---|---|
+| Phases complete | 1–7 (chapters 1–33) |
+| IPC channels | 80, all typebox-validated |
+| Gates | typecheck clean · 173 unit (27 files) · 31 e2e · 14 sidecar pytest |
+| Source | ~15.9k lines TS/TSX |
+| Pi version | pinned exactly at `0.84.2` |
+
+Open items carried forward from audit 5: H-3 (deleting a session file under a
+running session leaves a zombie tab), M-3/M-4 (Escape has no topmost-wins
+arbitration between Sheet/CommandPalette/ChatPage, and ⌘K stacks the palette
+over a full-window sheet — these pair naturally into one overlay-stack fix),
+M-5 (`ScopedModelsEditor` reports "Saved." even when the write failed), M-6
+(theme flash-of-default on launch), and the L-class polish items.
+
+## What we will do next
+
+Not yet implemented, roughly in priority order:
+
+1. **Overlay stack arbitration** (audit 5 M-3 + M-4) — one owner for Escape
+   and z-order across Sheet, CommandPalette, and dock.
+2. **Remote pi-server sessions** — connect to a pi daemon over Unix socket or
    SSH tunnel using pi's CBOR protocol (`pi-client`/`pi-server`). The
-   `RemotePiBackend` stub exists in `src/main/pi/remote-backend.ts`.
-2. **Windows/Linux builds** — architecture permits; needs platform-specific
-   packaging, keychain alternatives, and PTY handling.
-3. **Semantic session search** — embedding-based similarity search in the
-   Python sidecar (beyond FTS5 keyword matching).
-4. **Multi-window support** — separate BrowserWindows per project.
-5. **Light-theme audit** — theme bridge exists; visual polish pass needed.
-6. **Path-scoped permission allowlists** — "always allow writes under src/**";
+   `RemotePiBackend` stub exists in `src/main/pi/remote-backend.ts` and throws
+   `notImplemented`; upstream now ships the `./client` export it needs.
+3. **Path-scoped permission allowlists** — "always allow writes under src/**";
    the session-level always-allow memory covers the common case today.
+4. **Semantic session search** — embedding-based similarity search in the
+   Python sidecar (beyond FTS5 keyword matching).
+5. **Windows/Linux builds** — architecture permits; needs platform-specific
+   packaging, keychain alternatives, and PTY handling.
+6. **Multi-window support** — separate BrowserWindows per project.
+7. **`workspace.roots` pruning** — the allowlist accumulates roots and never
+   prunes (found during Phase 6 verification; not a correctness bug today).
 
 ## Permission modes (Phase 5 architecture)
 
@@ -128,16 +203,22 @@ icon by matching `PERMISSION_BLOCK_REASONS` from `src/shared/pi.ts`.
 
 ## For a new coding agent picking this up
 
-1. Read `docs/SECURITY.md` first (threat model, boundaries).
-2. Read `src/shared/pi.ts` — every IPC channel is defined there with its
-   schema. This is your map of what the app can do.
-3. Read `docs/chapter*-status.md` for implementation details per chapter.
-4. Run `scripts/setup-native.sh` to set up native modules (node-pty must match
+1. Read `docs/security.md` first (threat model, boundaries).
+2. Read `src/shared/pi.ts` — all 80 IPC channels are defined there with their
+   schemas. This is your map of what the app can do.
+3. Read `AGENTS.md` for the working rulebook (gates, conventions, process).
+4. Read `docs/chapter*-status.md` for phase-1 implementation details, and
+   `piplan/Phase-N/STATUS.md` for phases 2–7 (what shipped, and where the
+   implementation deliberately deviated from the plan).
+5. Run `scripts/setup-native.sh` to set up native modules (node-pty must match
    Electron ABI).
-5. Run `npm run dev` to start developing; `npm test` and `npm run e2e` to verify.
-6. If you need to understand how pi works internally, read the cloned repo at
+6. Run `npm run dev` to start developing; `npm test` and `npm run e2e` to verify.
+7. If you need to understand how pi works internally, read the cloned repo at
    `../pi/packages/coding-agent/docs/` — especially `sdk.md` and `rpc.md`.
-7. `.pibugs/pibugs1.md` and `.pibugs/pibugs2.md` document two full audit
-   cycles (44 findings, all fixed) — read them to understand known pitfalls.
-8. The pi version is pinned exactly in package.json (`@earendil-works/*`);
+   That clone tracks upstream `main` and is **ahead** of the pinned version, so
+   diff against the tag (`git diff v0.84.2..HEAD`) rather than reading `HEAD`
+   as if it were what we ship.
+8. `pibugs/pibugs1.md` … `pibugs5.md` document five audit cycles — read them to
+   understand known pitfalls before adding features in the same areas.
+9. The pi version is pinned exactly in package.json (`@earendil-works/*`);
    bump carefully and run the contract battery (`scripts/check-pi-updates.sh`).
