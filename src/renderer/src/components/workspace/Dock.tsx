@@ -11,6 +11,9 @@ import {
 	X,
 } from "lucide-react";
 import { Markdown } from "../chat/Markdown";
+import { ensureLanguage, highlight, langFor } from "../../lib/highlight";
+import { shikiThemeFor } from "../../../../shared/theme";
+import { useThemeId } from "../../lib/theme-context";
 import { parseArgumentHintFromHint } from "../../lib/command-hints";
 
 // ---------------------------------------------------------------------------
@@ -217,12 +220,46 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 							close
 						</button>
 					</div>
-					<pre className="font-mono text-[11px] whitespace-pre-wrap text-neutral-300">
-						{fileContent.content.slice(0, 50_000)}
-					</pre>
+					<HighlightedFile path={fileContent.path} content={fileContent.content.slice(0, 100_000)} />
 				</div>
 			)}
 		</div>
+	);
+}
+
+
+/**
+ * File preview with shiki highlighting, language inferred from the file name.
+ * Falls back to plain pre when the grammar is unknown or highlighting fails.
+ */
+function HighlightedFile({ path, content }: { path: string; content: string }): React.JSX.Element {
+	const themeId = useThemeId();
+	const [html, setHtml] = useState<string | null>(null);
+	useEffect(() => {
+		let cancelled = false;
+		const id = langFor(path);
+		if (id === "text") return;
+		void (async () => {
+			if (!(await ensureLanguage(id))) return;
+			const out = await highlight(content, id, shikiThemeFor(themeId));
+			if (!cancelled) setHtml(out);
+		})().catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [path, content, themeId]);
+	if (html !== null) {
+		return (
+			<div
+				className="overflow-x-auto font-mono text-[11px] [&_pre]:bg-transparent [&_code]:leading-relaxed"
+				dangerouslySetInnerHTML={{ __html: html }}
+			/>
+		);
+	}
+	return (
+		<pre className="font-mono text-[11px] whitespace-pre-wrap text-app-muted">
+			{content.slice(0, 50_000)}
+		</pre>
 	);
 }
 
