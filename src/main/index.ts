@@ -343,6 +343,7 @@ app.whenReady()
 				preloadPath: path.join(__dirname, "../preload/index.js"),
 				rendererUrl: process.env.ELECTRON_RENDERER_URL,
 				...(clampedBounds !== undefined ? { bounds: clampedBounds } : {}),
+				transparent: store.getSettingRaw("windowTransparency") === true,
 				onClosed: () => {
 					bus.setWindow(null);
 				},

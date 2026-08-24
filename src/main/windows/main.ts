@@ -10,11 +10,14 @@ export interface MainWindowOptions {
 	preloadPath: string;
 	rendererUrl: string | undefined; // dev server URL; undefined in production
 	bounds?: Electron.Rectangle;
+	/** macOS vibrancy glass behind a translucent base layer (phase 7). */
+	transparent?: boolean;
 	onClosed(): void;
 }
 
 export function createMainWindow(options: MainWindowOptions): BrowserWindow {
 	const { bounds } = options;
+	const transparent = options.transparent === true && process.platform === "darwin";
 	const window = new BrowserWindow({
 		...(bounds !== undefined
 			? {
@@ -29,7 +32,8 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
 		minHeight: 560,
 		titleBarStyle: "hiddenInset", // macOS-native feel; custom drag region in UI
 		trafficLightPosition: { x: 16, y: 16 },
-		backgroundColor: "#1a1a1e",
+		backgroundColor: transparent ? "#00000000" : "#1a1a1e",
+		...(transparent ? { vibrancy: "under-window" as const, visualEffectState: "active" as const } : {}),
 		show: false,
 		webPreferences: {
 			preload: options.preloadPath,

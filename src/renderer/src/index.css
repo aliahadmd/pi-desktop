@@ -45,6 +45,12 @@ body,
 		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
 }
 
+/* Window transparency (phase 7, ch32): the base layer goes translucent so
+   macOS vibrancy shows through; panels stay solid for readability. */
+html[data-transparency="on"] body {
+	background: color-mix(in srgb, var(--pi-bg) calc(var(--bg-alpha) * 100%), transparent);
+}
+
 /* ---- Motion tokens (phase 3, ch14) ---- */
 :root {
 	--dur-fast: 120ms;

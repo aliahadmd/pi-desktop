@@ -12,6 +12,7 @@ import {
 } from "../../../shared/pi";
 import { MODE_DESCRIPTION } from "../components/chat/ModePicker";
 import { THEME_PRESETS } from "../../../shared/theme";
+import { SCALES } from "../../../shared/display";
 import { ScopedModelsEditor } from "./ScopedModelsEditor";
 import { PackagesPanel } from "./PackagesPanel";
 
@@ -28,9 +29,17 @@ interface PiSettings {
 export function SettingsPage({
 	themeId,
 	onChangeTheme,
+	uiScale,
+	onChangeUiScale,
+	transparency,
+	onChangeTransparency,
 }: {
 	themeId: string;
 	onChangeTheme(next: string): void;
+	uiScale: number;
+	onChangeUiScale(next: number): void;
+	transparency: boolean;
+	onChangeTransparency(on: boolean): void;
 }): React.JSX.Element {
 	const [settings, setSettings] = useState<PiSettings>({});
 	const [saving, setSaving] = useState(false);
@@ -162,6 +171,43 @@ export function SettingsPage({
 
 				<div className="mt-8 border-t border-neutral-800 pt-5">
 					<div className="mb-2 text-sm text-neutral-200">Appearance</div>
+					<SettingRow
+						label="UI scale"
+						hint="Zoom the whole interface. Applies immediately."
+					>
+						<div className="flex gap-1" data-testid="ui-scale-group">
+							{SCALES.map((s) => (
+								<button
+									key={s}
+									type="button"
+									data-testid={`ui-scale-${String(Math.round(s * 100))}`}
+									onClick={() => onChangeUiScale(s)}
+									className={`rounded px-2.5 py-1 text-xs transition-standard ${
+										uiScale === s
+											? "bg-app-accent/20 text-app-text ring-1 ring-inset ring-app-accent/50"
+											: "text-app-muted hover:bg-neutral-800 hover:text-app-text"
+									}`}
+								>
+									{String(Math.round(s * 100))}%
+								</button>
+							))}
+						</div>
+					</SettingRow>
+					<SettingRow
+						label="Window transparency"
+						hint="Blur behind the window (macOS). Takes effect after reload."
+					>
+						<label className="flex cursor-pointer items-center gap-2 text-xs text-app-muted">
+							<input
+								type="checkbox"
+								data-testid="transparency-toggle"
+								checked={transparency}
+								onChange={(e) => onChangeTransparency(e.target.checked)}
+								className="h-4 w-4 accent-blue-500"
+							/>
+							{transparency ? "On — reload to apply changes" : "Off"}
+						</label>
+					</SettingRow>
 					<SettingRow
 						label="Theme"
 						hint="Applies immediately and persists. Code blocks follow the theme."

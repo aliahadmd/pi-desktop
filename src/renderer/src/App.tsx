@@ -3,6 +3,7 @@
  * Sheets for Models/Settings/Trust/Browse-all; motion throughout.
  */
 import { useEffect, useState } from "react";
+import { webFrame } from "electron";
 import { AnimatePresence, motion } from "motion/react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
 import ChatPage, { refreshState, type DockTab } from "./pages/ChatPage";
@@ -12,6 +13,7 @@ import {
 	DEFAULT_THEME_ID,
 	isThemePresetId,
 } from "../../shared/theme";
+import { clampScale } from "../../shared/display";
 import type { AuthPromptEvent } from "../../shared/protocol";
 import { ModelsPage } from "./pages/ModelsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -96,6 +98,59 @@ export default function App(): React.JSX.Element {
 			type: "app.settings.set",
 			key: "theme",
 			value: next,
+		});
+	}
+
+	// UI scale: persisted fraction applied via webFrame zoom.
+	const [uiScale, setUiScale] = useState<number>(1);
+	useEffect(() => {
+		void (async () => {
+			const r = await window.piDesktop.invoke({
+				type: "app.settings.get",
+				key: "uiScale",
+			});
+			const s = clampScale(r.ok ? r.data : 1);
+			setUiScale(s);
+			webFrame.setZoomFactor(s);
+		})();
+	}, []);
+
+	function changeUiScale(next: number): void {
+		const s = clampScale(next);
+		setUiScale(s);
+		webFrame.setZoomFactor(s);
+		void window.piDesktop.invoke({
+			type: "app.settings.set",
+			key: "uiScale",
+			value: JSON.stringify(s),
+		});
+	}
+
+	// Window transparency: renderer side sets a data attribute; the main
+	// process decides window construction options at boot. Toggle reloads.
+	const [transparency, setTransparency] = useState<boolean>(false);
+	useEffect(() => {
+		void (async () => {
+			const r = await window.piDesktop.invoke({
+				type: "app.settings.get",
+				key: "windowTransparency",
+			});
+			const raw: unknown = r.ok ? r.data : undefined;
+			const on = typeof raw === "string" ? JSON.parse(raw) === true : raw === true;
+			if (on) {
+				setTransparency(true);
+				document.documentElement.dataset.transparency = "on";
+			}
+		})();
+	}, []);
+
+	function changeTransparency(on: boolean): void {
+		setTransparency(on);
+		document.documentElement.dataset.transparency = on ? "on" : "off";
+		void window.piDesktop.invoke({
+			type: "app.settings.set",
+			key: "windowTransparency",
+			value: JSON.stringify(on),
 		});
 	}
 
@@ -269,7 +324,14 @@ export default function App(): React.JSX.Element {
 				onClose={() => setSheet(null)}
 				testId="sheet-settings"
 			>
-				<SettingsPage themeId={themeId} onChangeTheme={changeTheme} />
+				<SettingsPage
+					themeId={themeId}
+					onChangeTheme={changeTheme}
+					uiScale={uiScale}
+					onChangeUiScale={changeUiScale}
+					transparency={transparency}
+					onChangeTransparency={changeTransparency}
+				/>
 			</Sheet>
 			<Sheet
 				open={sheet === "trust"}
