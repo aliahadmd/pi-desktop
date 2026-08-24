@@ -7,11 +7,13 @@ import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
 import {
 	FolderOpen,
+	Minimize2,
 	Network,
 	Plus,
 	SquareSlash,
 	SquareTerminal,
 	Search,
+	Upload,
 	X,
 } from "lucide-react";
 import type {
@@ -505,59 +507,59 @@ export default function ChatPage({
 								</div>
 							</motion.div>
 							</AnimatePresence>
-						)}
+					)}
+
+					{/* Full-height right rail (phase 6): dock toggles live at the
+					    window edge so shrinking the window never squeezes the
+					    transcript; Compact/Export moved here from the old bottom
+					    control row. */}
+					<div className="flex w-11 shrink-0 flex-col items-center gap-1 border-l border-neutral-800 py-2">
+						{([
+							{ tab: "files" as const, Icon: FolderOpen, title: "Files" },
+							{ tab: "review" as const, Icon: Search, title: `Review (${String(reviewCount)})` },
+							{ tab: "commands" as const, Icon: SquareSlash, title: "Commands" },
+							{ tab: "tree" as const, Icon: Network, title: "Tree" },
+							{ tab: "terminal" as const, Icon: SquareTerminal, title: "Terminal" },
+							{ tab: "compact" as const, Icon: Minimize2, title: "Compact context" },
+							{ tab: "export" as const, Icon: Upload, title: "Export session (HTML)" },
+						] as const).map(({ tab, Icon, title }) => (
+							<button
+								key={tab}
+								type="button"
+								data-testid={`rail-${tab}`}
+								onClick={() => {
+									if (tab === "compact") {
+										setCompactOpen(true);
+										return;
+									}
+									if (tab === "export") {
+										void window.piDesktop
+											.invoke({ type: "session.export_html", sessionId: active.id })
+											.then((r) => {
+												if (!r.ok) pushErrorNotice(active.id, r.error.message);
+											});
+										return;
+									}
+									setDockTab(dockTab === tab ? null : tab);
+								}}
+								title={title}
+								className={`relative flex h-8 w-8 items-center justify-center rounded transition-standard ${
+									dockTab === tab
+										? "bg-neutral-800 text-blue-400"
+										: "text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
+								}`}
+							>
+								<Icon size={16} strokeWidth={1.75} />
+								{tab === "review" && reviewCount > 0 && (
+									<span className="absolute -right-0.5 -top-0.5 rounded-full bg-red-600 px-1 text-[8px] leading-tight text-white">
+										{reviewCount}
+									</span>
+								)}
+							</button>
+						))}
 					</div>
 
-
-					{/* Bottom control row — shrink-0: under height pressure flex
-					    would otherwise compress this row and push the status bar
-					    below the window edge. */}
-					<div className="flex shrink-0 items-center gap-2 border-t border-neutral-800 px-3 py-1">
-						<button
-							type="button"
-							disabled={active.phase !== "idle"}
-							onClick={() => setCompactOpen(true)}
-							className="rounded px-2 py-0.5 text-[10px] text-neutral-500 hover:text-neutral-300 disabled:opacity-40"
-							title="Summarize older context to free window space"
-						>
-							Compact…
-						</button>
-						<select
-							onChange={(e) => {
-								const action = e.target.value;
-								e.target.selectedIndex = 0;
-								if (action === "") return;
-								void window.piDesktop
-									.invoke(
-										action === "html"
-											? { type: "session.export_html", sessionId: active.id }
-											: { type: "session.export_jsonl", sessionId: active.id }
-									)
-									.then((r) => {
-										if (!r.ok) pushErrorNotice(active.id, r.error.message);
-									});
-							}}
-							defaultValue=""
-							className="rounded bg-transparent px-1 py-0.5 text-[10px] text-neutral-500 hover:text-neutral-300"
-							title="Export session"
-						>
-							<option value="" disabled>Export…</option>
-							<option value="html">HTML</option>
-							<option value="jsonl">JSONL</option>
-						</select>
-						<button
-							type="button"
-							data-testid="toggle-terminal"
-							onClick={() => setDockTab((prev) => (prev === "terminal" ? null : "terminal"))}
-							className={`rounded px-2 py-0.5 text-[10px] ${
-								dockTab === "terminal"
-									? "bg-neutral-800 text-blue-400"
-									: "text-neutral-500 hover:text-neutral-300"
-							}`}
-						>
-							Terminal
-						</button>
-					</div>
+				</div>
 
 					<div className="shrink-0">
 						<Composer
