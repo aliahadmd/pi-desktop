@@ -202,8 +202,6 @@ export default function App(): React.JSX.Element {
 			<TopBar
 				sidebarHidden={sidebarCollapsed}
 				onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
-				themeId={themeId}
-				onCycleTheme={changeTheme}
 				activeSessionId={activeSessionId}
 				dockTab={dockTab}
 				reviewCount={reviewCount}

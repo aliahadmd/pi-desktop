@@ -15,9 +15,7 @@ import {
 	SquareTerminal,
 	Search,
 	Upload,
-	Palette,
 } from "lucide-react";
-import { THEME_PRESETS } from "../../../../shared/theme";
 
 /** Dock panel ids; mirrors ChatPage's state (kept local to avoid an import cycle). */
 export type TopBarDockTab =
@@ -31,8 +29,6 @@ export type TopBarDockTab =
 export function TopBar({
 	sidebarHidden,
 	onToggleSidebar,
-	themeId,
-	onCycleTheme,
 	activeSessionId,
 	dockTab,
 	reviewCount,
@@ -42,8 +38,6 @@ export function TopBar({
 }: {
 	sidebarHidden: boolean;
 	onToggleSidebar(): void;
-	themeId: string;
-	onCycleTheme(next: string): void;
 	activeSessionId: string | null;
 	dockTab: Exclude<TopBarDockTab, null> | null;
 	reviewCount: number;
@@ -52,12 +46,6 @@ export function TopBar({
 	onExport(format: "html" | "jsonl"): void;
 }): React.JSX.Element {
 	const hasSession = activeSessionId !== null;
-
-	function cyclePreset(): void {
-		const idx = THEME_PRESETS.findIndex((p) => p.id === themeId);
-		const next = THEME_PRESETS[(idx + 1) % THEME_PRESETS.length]!;
-		onCycleTheme(next.id);
-	}
 
 	return (
 		<div
@@ -110,15 +98,6 @@ export function TopBar({
 
 					<div className="mx-1.5 h-4 w-px bg-app-border" />
 
-					<button
-						type="button"
-						data-testid="topbar-theme-cycle"
-						title={`Theme: ${THEME_PRESETS.find((p) => p.id === themeId)?.label ?? themeId} — click to cycle`}
-						onClick={cyclePreset}
-						className="rounded p-1.5 text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
-					>
-						<Palette size={14} strokeWidth={1.75} />
-					</button>
 					<button
 						type="button"
 						data-testid="topbar-compact"
