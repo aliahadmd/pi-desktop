@@ -110,7 +110,7 @@ export function TrustPanel(): React.JSX.Element {
 									<span
 										className={`rounded px-1.5 py-0.5 text-[9px] ${
 											entry.decision === "trusted"
-												? "bg-green-950 text-green-400"
+												? "bg-success-soft text-success"
 												: entry.decision === "denied"
 													? "bg-danger-soft text-danger"
 													: "bg-neutral-800 text-neutral-400"
@@ -121,7 +121,7 @@ export function TrustPanel(): React.JSX.Element {
 									<button
 										type="button"
 										onClick={() => void setDecision(entry.path, "trusted")}
-										className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-green-950 hover:text-green-400"
+										className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-success-soft hover:text-success"
 									>
 										Trust
 									</button>
