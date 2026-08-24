@@ -476,6 +476,13 @@ export default function ChatPage({
 								if (activeId === null) return;
 								const previous = permissionMode;
 								setPermissionMode(mode); // optimistic
+								if (mode === "plan" && localStorage.getItem("pidesktop.planModeHintShown") === null) {
+									localStorage.setItem("pidesktop.planModeHintShown", "1");
+									pushErrorNotice(
+										active.id,
+										"Plan mode: research freely — file edits and commands are blocked. Click the mode chip to switch.",
+									);
+								}
 								void window.piDesktop
 									.invoke({ type: "permission.set_mode", sessionId: activeId, mode })
 									.then((r) => {

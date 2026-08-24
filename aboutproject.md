@@ -103,6 +103,28 @@ These are planned but not yet implemented:
    Python sidecar (beyond FTS5 keyword matching).
 4. **Multi-window support** — separate BrowserWindows per project.
 5. **Light-theme audit** — theme bridge exists; visual polish pass needed.
+6. **Path-scoped permission allowlists** — "always allow writes under src/**";
+   the session-level always-allow memory covers the common case today.
+
+## Permission modes (Phase 5 architecture)
+
+Agent autonomy is a five-mode ladder, not a boolean: **Plan** (read-only),
+**Always Ask**, **Ask Before Edits** (default), **Accept File Edits**, and
+**Bypass**. State lives in `src/main/pi/permissions.ts` — a mutable store the
+permission extension reads synchronously inside each `tool_call` handler, so
+switching modes applies mid-session without re-registering extensions.
+Session overrides reset on close; the default persists in StoreService under
+`permissionMode` (migrated once from the legacy `confirmBeforeApply` toggle).
+
+The extension (`src/main/pi/approve-extension.ts`) uses only upstream's public
+`tool_call` veto: returning `{ block: true, reason }` stops the tool and feeds
+`reason` back to the model, so Plan-mode blocks instruct the agent to present
+a plan instead of executing. Gated calls prompt via `ctx.ui.select`
+(Allow once / Always allow this command / Deny); "always allow" is remembered
+per exact command for the session. Read-only tools (read/grep/find/ls) are
+never gated. The composer's ModePicker and the Settings radio group both talk
+to this store over IPC; the transcript styles blocked calls with a ListTodo
+icon by matching `PERMISSION_BLOCK_REASONS` from `src/shared/pi.ts`.
 
 ## For a new coding agent picking this up
 
