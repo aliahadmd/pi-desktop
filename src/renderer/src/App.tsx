@@ -3,7 +3,6 @@
  * Sheets for Models/Settings/Trust/Browse-all; motion throughout.
  */
 import { useEffect, useState } from "react";
-import { webFrame } from "electron";
 import { AnimatePresence, motion } from "motion/react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
 import ChatPage, { refreshState, type DockTab } from "./pages/ChatPage";
@@ -111,14 +110,14 @@ export default function App(): React.JSX.Element {
 			});
 			const s = clampScale(r.ok ? r.data : 1);
 			setUiScale(s);
-			webFrame.setZoomFactor(s);
+			window.electron.webFrame.setZoomFactor(s);
 		})();
 	}, []);
 
 	function changeUiScale(next: number): void {
 		const s = clampScale(next);
 		setUiScale(s);
-		webFrame.setZoomFactor(s);
+		window.electron.webFrame.setZoomFactor(s);
 		void window.piDesktop.invoke({
 			type: "app.settings.set",
 			key: "uiScale",

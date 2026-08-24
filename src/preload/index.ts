@@ -3,7 +3,7 @@
  * Exposes exactly one object, `window.piDesktop`, with typed invoke/on plus
  * the terminal (pty) streaming surface. No electron or node APIs leak.
  */
-import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
 const IPC_INVOKE_CHANNEL = "pidesktop:invoke";
 const IPC_EVENT_CHANNEL = "pidesktop:event";
@@ -54,3 +54,13 @@ const bridge = {
 };
 
 contextBridge.exposeInMainWorld("piDesktop", bridge);
+// Expose webFrame for the renderer's UI-scale control (phase 7). The
+// renderer itself cannot import "electron" — that pulls the npm package
+// into the browser bundle, which crashes on __dirname at boot.
+contextBridge.exposeInMainWorld("electron", {
+	webFrame: {
+		setZoomFactor: (factor: number): void => {
+			webFrame.setZoomFactor(factor);
+		},
+	},
+});

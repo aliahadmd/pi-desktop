@@ -89,17 +89,17 @@ describe("workspace UI", () => {
 		await page.getByText("RPC", { exact: true }).first().click();
 		await page.getByTestId("transcript").waitFor({ timeout: 30_000 });
 
-		await page.getByTestId("actionbar-files").click();
+		await page.getByTestId("topbar-files").click();
 		// Explorer header shows the session cwd once registered as a root.
 		await page.getByText(os.tmpdir()).first().waitFor({ timeout: 10_000 });
 
-		await page.getByTestId("actionbar-review").first().click();
+		await page.getByTestId("topbar-review").first().click();
 		await page
 			.getByText(/File changes made by the agent|diff --git/)
 			.first()
 			.waitFor({ timeout: 10_000 });
 
-		await page.getByText("Commands").first().click();
+		await page.getByTestId("topbar-commands").first().click();
 		await page
 			.getByPlaceholder("Filter commands…")
 			.first()
@@ -107,7 +107,7 @@ describe("workspace UI", () => {
 	}, 60_000);
 
 	it("toggles the terminal panel without crashing", async () => {
-		await page.getByTestId("toggle-terminal").click();
+		await page.getByTestId("topbar-terminal").click();
 		// xterm creates a textarea helper once initialized.
 		await page
 			.locator(".xterm")
@@ -116,7 +116,7 @@ describe("workspace UI", () => {
 			.catch(() => {
 				// xterm may not mount in headless CI environments; absence is not fatal
 			});
-		await page.getByTestId("toggle-terminal").click();
+		await page.getByTestId("topbar-terminal").click();
 		expect(true).toBe(true);
 	}, 30_000);
 });
