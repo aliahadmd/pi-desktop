@@ -340,40 +340,9 @@ export default function ChatPage({
 					<div className="flex min-h-0 flex-1">
 						<div className="flex min-w-0 flex-1 flex-col">
 							<Transcript blocks={active.blocks} phase={active.phase} sessionId={active.id} />
-						</div>
+							</div>
 
-						{/* Icon rail (ch22) */}
-							<div className="flex w-10 shrink-0 flex-col items-center gap-0.5 border-l border-neutral-800 py-2">
-								{([
-									{ tab: "files" as const, Icon: FolderOpen, title: "Files" },
-									{ tab: "review" as const, Icon: Search, title: `Review (${reviewCount})` },
-									{ tab: "commands" as const, Icon: SquareSlash, title: "Commands" },
-									{ tab: "tree" as const, Icon: Network, title: "Tree" },
-									{ tab: "terminal" as const, Icon: SquareTerminal, title: "Terminal" },
-								]).map(({ tab, Icon, title }) => (
-									<button
-										key={tab}
-										type="button"
-										data-testid={`rail-${tab}`}
-										onClick={() => setDockTab(dockTab === tab ? null : tab)}
-										title={title}
-										className={`relative flex h-8 w-8 items-center justify-center rounded transition-standard ${
-											dockTab === tab
-												? "bg-neutral-800 text-blue-400"
-												: "text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
-										}`}
-									>
-										<Icon size={16} strokeWidth={1.75} />
-										{tab === "review" && reviewCount > 0 && (
-											<span className="absolute -right-0.5 -top-0.5 rounded-full bg-red-600 px-1 text-[8px] leading-tight text-white">
-												{reviewCount}
-											</span>
-										)}
-									</button>
-								))}
-						</div>
-
-						{dockTab !== null && (
+							{dockTab !== null && (
 							<AnimatePresence initial={false}>
 							<motion.div
 								initial={{ width: 0, opacity: 0 }}
