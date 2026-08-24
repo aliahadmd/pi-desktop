@@ -18,6 +18,7 @@ import {
 	type UiDialogResponse,
 } from "../../shared/pi";
 import { describeError, type BackendOptions, type IPiBackend } from "./backend";
+import { createPermissionExtension } from "./approve-extension";
 import {
 	clearSessionPermissions,
 	getMode,
@@ -26,6 +27,16 @@ import {
 } from "./permissions";
 import { RpcPiBackend } from "./rpc-backend";
 import { SdkPiBackend } from "./sdk-backend";
+
+/**
+ * Placeholder identifying the desktop permission extension in
+ * `extensionFactories`. startSession swaps it for a fresh extension bound to
+ * the new session's own app-session id — see the H-1 note there.
+ */
+export const permissionExtensionMarker = {
+	name: "pi-desktop-permissions",
+	factory: () => (): void => {},
+};
 
 interface SessionEntry {
 	id: string;
@@ -342,14 +353,26 @@ export class PiService {
 		noSession?: boolean;
 	}): Promise<SessionOpenedResponse> {
 		const id = randomUUID();
+		// Audit 5 H-1: the permission extension must evaluate tool calls against
+		// THIS session's mode. A shared factory list closed over a global
+		// "most recently opened" accessor, so with two sessions streaming the
+		// older one was gated by the newer one's mode. Bind the id per session.
+		const sessionExtensions = this.extensionFactories.map((factory) =>
+			factory === permissionExtensionMarker
+				? {
+						...permissionExtensionMarker,
+						factory: createPermissionExtension(() => id),
+					}
+				: factory,
+		);
 		const backendOptions: BackendOptions = {
 			cwd: opts.cwd,
 			...(opts.sessionPath !== undefined ? { sessionPath: opts.sessionPath } : {}),
 			...(opts.name !== undefined ? { name: opts.name } : {}),
 			...(opts.noSession === true ? { noSession: true } : {}),
 			...(this.sharedRuntime !== undefined ? { modelRuntime: this.sharedRuntime } : {}),
-			...(this.extensionFactories.length > 0
-				? { extensionFactories: this.extensionFactories }
+			...(sessionExtensions.length > 0
+				? { extensionFactories: sessionExtensions }
 				: {}),
 			...(this.scopedModels.length > 0 ? { scopedModels: this.scopedModels } : {}),
 			...(this.desktopTools.length > 0 ? { desktopTools: this.desktopTools } : {}),

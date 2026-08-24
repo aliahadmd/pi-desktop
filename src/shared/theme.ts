@@ -35,9 +35,19 @@ export interface ThemeVars {
 	infoSoft: string;
 	success: string;
 	successSoft: string;
+	/** High-contrast success for text/icons on any background. */
+	successStrong: string;
 	danger: string;
 	dangerSoft: string;
+	/** High-contrast danger for text/icons on any background. */
+	dangerStrong: string;
 	warning: string;
+	/** Low-emphasis warning fill (bypass chip, retry banners). */
+	warningSoft: string;
+	/** Warning-tinted border line. */
+	warningLine: string;
+	/** High-contrast warning for text/icons on any background. */
+	warningStrong: string;
 	userBubble: string;
 }
 
@@ -58,9 +68,14 @@ export const REQUIRED_THEME_VARS: Array<keyof ThemeVars> = [
 	"infoSoft",
 	"success",
 	"successSoft",
+	"successStrong",
 	"danger",
 	"dangerSoft",
+	"dangerStrong",
 	"warning",
+	"warningSoft",
+	"warningLine",
+	"warningStrong",
 	"userBubble",
 ];
 
@@ -85,8 +100,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			infoSoft: "rgba(167, 139, 250, 0.16)",
 			success: "#22c55e",
 			successSoft: "rgba(34, 197, 94, 0.16)",
+			successStrong: "#4ade80",
 			danger: "#ef4444",
 			dangerSoft: "rgba(239, 68, 68, 0.16)",
+			dangerStrong: "#f87171",
+			warningSoft: "rgba(245, 158, 11, 0.16)",
+			warningLine: "rgba(245, 158, 11, 0.45)",
+			warningStrong: "#fbbf24",
 			warning: "#f59e0b",
 			userBubble: "rgba(30, 58, 138, 0.7)",
 		},
@@ -112,8 +132,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			infoSoft: "rgba(124, 58, 237, 0.10)",
 			success: "#16a34a",
 			successSoft: "rgba(22, 163, 74, 0.12)",
+			successStrong: "#15803d",
 			danger: "#dc2626",
 			dangerSoft: "rgba(220, 38, 38, 0.10)",
+			dangerStrong: "#b91c1c",
+			warningSoft: "rgba(217, 119, 6, 0.12)",
+			warningLine: "rgba(217, 119, 6, 0.40)",
+			warningStrong: "#92400e",
 			warning: "#d97706",
 			userBubble: "rgba(219, 234, 254, 0.9)",
 		},
@@ -139,8 +164,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			infoSoft: "rgba(203, 166, 247, 0.16)",
 			success: "#a6e3a1",
 			successSoft: "rgba(166, 227, 161, 0.14)",
+			successStrong: "#a6e3a1",
 			danger: "#f38ba8",
 			dangerSoft: "rgba(243, 139, 168, 0.14)",
+			dangerStrong: "#f38ba8",
+			warningSoft: "rgba(250, 179, 135, 0.14)",
+			warningLine: "rgba(250, 179, 135, 0.45)",
+			warningStrong: "#fab387",
 			warning: "#fab387",
 			userBubble: "rgba(49, 50, 68, 0.85)",
 		},
@@ -166,8 +196,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			infoSoft: "rgba(108, 113, 196, 0.12)",
 			success: "#859900",
 			successSoft: "rgba(133, 153, 0, 0.14)",
+			successStrong: "#859900",
 			danger: "#dc322f",
 			dangerSoft: "rgba(220, 50, 47, 0.12)",
+			dangerStrong: "#dc322f",
+			warningSoft: "rgba(181, 137, 0, 0.12)",
+			warningLine: "rgba(181, 137, 0, 0.40)",
+			warningStrong: "#b58900",
 			warning: "#b58900",
 			userBubble: "rgba(238, 232, 213, 0.95)",
 		},
@@ -193,8 +228,13 @@ export const THEME_PRESETS: ThemePreset[] = [
 			infoSoft: "rgba(163, 113, 247, 0.16)",
 			success: "#3fb950",
 			successSoft: "rgba(63, 185, 80, 0.16)",
+			successStrong: "#56d364",
 			danger: "#f85149",
 			dangerSoft: "rgba(248, 81, 73, 0.16)",
+			dangerStrong: "#ff7b72",
+			warningSoft: "rgba(210, 153, 34, 0.16)",
+			warningLine: "rgba(210, 153, 34, 0.45)",
+			warningStrong: "#e3b341",
 			warning: "#d29922",
 			userBubble: "rgba(33, 38, 45, 0.85)",
 		},

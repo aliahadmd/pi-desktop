@@ -218,6 +218,13 @@ export const useSessions = create<PiSessionsState>((set, get) => {
 					if (s === undefined) return prev;
 					const next: SessionUi = { ...s };
 					if (event.type === "ui_dialog") next.pendingDialog = event.request;
+					// Rename: pi emits session_info_changed after setSessionName.
+					// The filter below admitted this event but no branch consumed it,
+					// so the tab label stayed stale until an unrelated refresh
+					// (audit 5 M-2).
+					if (event.type === "session_info_changed" && event.name !== undefined) {
+						next.sessionName = event.name;
+					}
 					if (event.type === "queue_update") {
 						next.queue = { steering: [...event.steering], followUp: [...event.followUp] };
 					}

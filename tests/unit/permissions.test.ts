@@ -177,3 +177,70 @@ describe("default fallback", () => {
 		expect(selectCalls).toHaveLength(0); // bypass default -> no prompt
 	});
 });
+
+/**
+ * Audit 5 H-1 regression: with two sessions streaming concurrently, each
+ * extension instance must resolve its OWN session's mode. The pre-fix build
+ * shared one global "most-recently-opened" accessor, so the older session was
+ * gated by whichever tab had been opened last.
+ */
+describe("per-session isolation (audit 5 H-1)", () => {
+	function makeBound(
+		sessionId: string,
+		mode: PermissionMode,
+		promptAnswer = "Allow once",
+	) {
+		setMode(sessionId, mode);
+		let handler: ((e: unknown, ctx: unknown) => Promise<unknown>) | undefined;
+		const selectCalls: string[] = [];
+		const factory = createPermissionExtension(() => sessionId);
+		factory({
+			on: (name: string, h: never) => {
+				if (name === "tool_call") handler = h as typeof handler;
+			},
+		} as unknown as ExtensionAPI);
+		return {
+			async run(): Promise<boolean> {
+				let prompted = false;
+				await handler?.(
+					{ toolName: "write", input: { path: "/a" } },
+					{
+						ui: {
+							select: async (_title: string, _options: string[]) => {
+								prompted = true;
+								selectCalls.push(_title);
+								return promptAnswer;
+							},
+						},
+					},
+				);
+				return prompted;
+			},
+			selectCalls,
+		};
+	}
+
+	it("two concurrent sessions gate by their OWN modes", async () => {
+		const a = makeBound("session-a", "askBeforeEdits");
+		const b = makeBound("session-b", "bypass");
+
+		// Open B after A — under the old global accessor both would read
+		// B's (bypass) mode because B is "most recent".
+		expect(await b.run()).toBe(false); // bypass: never prompts
+		expect(await a.run()).toBe(true); // askBeforeEdits: still gated
+	});
+
+	it("always-allow memory stays keyed per session", async () => {
+		// A answers "Always allow this command"; B answers "Deny".
+		const a = makeBound("shared-a", "alwaysAsk", "Always allow this command");
+		const b = makeBound("shared-b", "alwaysAsk", "Deny");
+
+		// A allows with memory...
+		await a.run();
+		expect(a.selectCalls).toHaveLength(1);
+
+		// ...but B has its own memory and must still prompt for the same call.
+		const promptedInB = await b.run();
+		expect(promptedInB).toBe(true);
+	});
+});

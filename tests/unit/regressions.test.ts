@@ -264,12 +264,18 @@ describe("regression: escaped absolute positioning (plan 003)", () => {
 
 describe("regression: permission extension is wired into PiService", () => {
 	it("main/index.ts loads the desktop permission extension unconditionally", () => {
-		const source = readFileSync(path.join(ROOT, "src/main/index.ts"), "utf8");
-		expect(source).toContain("setExtensionFactories");
-		expect(source).toContain("pi-desktop-permissions");
+		const index = readFileSync(path.join(ROOT, "src/main/index.ts"), "utf8");
+		const service = readFileSync(path.join(ROOT, "src/main/pi/service.ts"), "utf8");
+		expect(index).toContain("setExtensionFactories");
+		// The extension identity moved into a marker exported from service.ts
+		// (audit 5 H-1: startSession swaps it per session so each session gates
+		// by its OWN mode, not the most-recently-opened one).
+		expect(service).toContain("permissionExtensionMarker");
+		expect(index).toContain("permissionExtensionMarker");
+		expect(service).toContain("createPermissionExtension");
 		// The mode extension must always be registered (it no-ops in bypass);
 		// conditional registration was the old boolean gate's design.
-		expect(source).not.toContain('"pi-desktop-approve"');
+		expect(index).not.toContain('"pi-desktop-approve"');
 	});
 });
 

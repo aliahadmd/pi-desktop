@@ -19,9 +19,14 @@
 	--pi-info-soft: rgba(167, 139, 250, 0.16);
 	--pi-success: #22c55e;
 	--pi-success-soft: rgba(34, 197, 94, 0.16);
+	--pi-success-strong: #4ade80;
 	--pi-danger: #ef4444;
 	--pi-danger-soft: rgba(239, 68, 68, 0.16);
+	--pi-danger-strong: #f87171;
 	--pi-warning: #f59e0b;
+	--pi-warning-soft: rgba(245, 158, 11, 0.16);
+	--pi-warning-line: rgba(245, 158, 11, 0.45);
+	--pi-warning-strong: #fbbf24;
 	--pi-user-bubble: rgba(30, 58, 138, 0.7);
 	--bg-alpha: 1;
 }
@@ -46,9 +51,14 @@
 	--color-info-soft: var(--pi-info-soft);
 	--color-success: var(--pi-success);
 	--color-success-soft: var(--pi-success-soft);
+	--color-success-strong: var(--pi-success-strong);
 	--color-danger: var(--pi-danger);
 	--color-danger-soft: var(--pi-danger-soft);
+	--color-danger-strong: var(--pi-danger-strong);
 	--color-warning: var(--pi-warning);
+	--color-warning-soft: var(--pi-warning-soft);
+	--color-warning-line: var(--pi-warning-line);
+	--color-warning-strong: var(--pi-warning-strong);
 }
 
 /* Palette remap (phase 7): components use the neutral/blue ramps
@@ -72,13 +82,27 @@
 	--color-blue-400: var(--pi-accent-strong);
 	--color-blue-500: var(--pi-accent);
 	--color-blue-600: var(--pi-accent);
+	--color-blue-700: var(--pi-accent-strong);
+	--color-blue-800: var(--pi-accent-line);
+	--color-blue-900: var(--pi-accent-soft);
+	--color-red-300: var(--pi-danger-strong);
 	--color-red-500: var(--pi-danger);
 	--color-red-600: var(--pi-danger);
+	--color-red-700: var(--pi-danger);
+	--color-red-800: var(--pi-danger);
+	--color-red-900: var(--pi-danger-soft);
+	--color-green-400: var(--pi-success-strong);
 	--color-green-500: var(--pi-success);
 	--color-green-600: var(--pi-success);
 	--color-emerald-500: var(--pi-success);
 	--color-yellow-500: var(--pi-warning);
+	--color-amber-200: var(--pi-warning-strong);
+	--color-amber-300: var(--pi-warning-strong);
+	--color-amber-400: var(--pi-warning-strong);
 	--color-amber-500: var(--pi-warning);
+	--color-amber-600: var(--pi-warning);
+	--color-amber-900: var(--pi-warning-line);
+	--color-amber-950: var(--pi-warning-soft);
 	--color-purple-500: var(--pi-accent-strong);
 }
 

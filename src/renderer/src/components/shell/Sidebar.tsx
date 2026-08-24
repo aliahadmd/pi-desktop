@@ -64,6 +64,9 @@ export function Sidebar({
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 	const [menuFor, setMenuFor] = useState<string | null>(null);
 	const liveSessions = useSessions((s) => s.sessions);
+	// Subscribed (not getState()) so a bare activeId change re-renders the
+	// highlight; audit 5 M-1.
+	const activeId = useSessions((s) => s.activeId);
 
 	const load = useCallback(async (): Promise<void> => {
 		const result = await window.piDesktop.invoke({
@@ -259,7 +262,13 @@ export function Sidebar({
 				sessionPath: s.filePath,
 				...(s.cwd !== null ? { cwd: s.cwd } : {}),
 			});
-			if (result.ok) onOpenSession(result.data as never);
+			if (result.ok) {
+				onOpenSession(result.data as never);
+			} else {
+				// Dead session file (moved/deleted/corrupt) used to fail
+				// silently — the click did nothing at all (audit 5 M-7).
+				useSessions.getState().pushErrorNotice(activeId ?? s.id, `Resume failed: ${result.error.message}`);
+			}
 		} finally {
 			setResuming((prev) => {
 				const next = new Set(prev);
@@ -497,9 +506,10 @@ export function Sidebar({
 										>
 											{list.map((s) => {
 												const dot = statusDot(s.id);
-												const isActive =
-													useSessions.getState().activeId === s.id ||
-													Object.keys(liveSessions).includes(s.id);
+												// Strictly the active session. An earlier clause also lit
+												// every *open* session, so with three tabs all three rows
+												// rendered selected (audit 5 M-1).
+												const isActive = activeId === s.id;
 												return (
 													<div
 														key={s.id}

@@ -217,7 +217,12 @@ export function CommandPalette({
 				label: "Rename session…",
 				section: "Session actions",
 				run: () => {
-					const current = sessions[sessionId]?.cwd.split("/").pop() ?? "";
+					// Prefill with the current name, not the project folder — the
+					// point of rename is to change what's here (audit 4 M-2 / 5 M-2).
+					const current =
+						sessions[sessionId]?.sessionName ??
+						sessions[sessionId]?.cwd.split("/").pop() ??
+						"";
 					setQuery("");
 					setRenameValue(current);
 				},

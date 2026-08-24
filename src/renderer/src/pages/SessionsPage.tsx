@@ -62,6 +62,7 @@ export function SessionsPage({
 		totalTokens: 0,
 	});
 	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const [sidecarStatus, setSidecarStatus] = useState<SidecarStatus>("stopped");
 	const [hits, setHits] = useState<SidecarSearchHit[] | null>(null);
 	const [top, setTop] = useState<TopSessionRow[]>([]);
@@ -163,6 +164,9 @@ export function SessionsPage({
 			});
 			if (result.ok) {
 				onResume?.(result.data);
+			} else {
+				// Surface the failure instead of a no-op click (audit 5 M-7).
+				setError(result.error.message);
 			}
 		} finally {
 			setBusy(false);
@@ -210,6 +214,12 @@ export function SessionsPage({
 						Refresh
 					</button>
 				</div>
+
+				{error !== null && (
+					<div className="mx-3 mt-3 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">
+						{error}
+					</div>
+				)}
 
 				{/* FTS hits (sidecar) */}
 				{hits !== null && hits.length > 0 && (

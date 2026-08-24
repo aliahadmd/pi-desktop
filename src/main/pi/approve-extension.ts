@@ -52,10 +52,14 @@ function isGated(toolName: string, mode: PermissionMode): boolean {
 }
 
 /**
- * The permission-mode extension.
+ * The permission-mode extension factory.
  *
- * Takes an accessor for the currently active app session id so handlers can
- * look up that session's mode; pi's tool_call event does not carry one.
+ * `getAppSessionId` resolves the app-session id that OWNS the session this
+ * extension instance is created for. Audit 5 H-1: a single global accessor
+ * (most-recently-opened session) made every concurrent session evaluate tool
+ * calls against whichever tab was opened last — tab A could be gated by tab
+ * B's mode, or escape plan mode via it. PiService now builds one extension
+ * per SDK session with the id bound at creation.
  */
 export const createPermissionExtension = (
 	getAppSessionId: () => string | null,

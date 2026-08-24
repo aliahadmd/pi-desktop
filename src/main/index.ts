@@ -24,7 +24,7 @@ import { SidecarManager, type SearchHit } from "./sidecar/manager";
 import { StoreService } from "./store/service";
 import { FileBridge } from "./fs-bridge";
 import * as gitService from "./git-service";
-import { createPermissionExtension } from "./pi/approve-extension";
+import { permissionExtensionMarker } from "./pi/service";
 import { setDefaultMode } from "./pi/permissions";
 import {
 	DEFAULT_PERMISSION_MODE,
@@ -164,13 +164,11 @@ app.whenReady()
 			);
 		}
 		setDefaultMode(defaultMode);
-		const service = piService;
-		piService.setExtensionFactories([
-			{
-				name: "pi-desktop-permissions",
-				factory: createPermissionExtension(() => service.getActiveAppSessionId()),
-			},
-		]);
+		// Audit 5 H-1: register the MARKER, not a built factory. startSession
+		// swaps it per session so each SDK session gets its own permission
+		// extension bound to its own app-session id (a shared global accessor
+		// gated one session by another's mode).
+		piService.setExtensionFactories([permissionExtensionMarker]);
 		piService.onDefaultModeChange = (mode) => {
 			store.setSettingRaw("permissionMode", mode);
 			log.info("main", `default permission mode set to ${mode}`);
