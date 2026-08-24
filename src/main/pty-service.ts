@@ -70,8 +70,18 @@ export class PtyService {
 
 	private async create(id: string, cwd: string, cols: number, rows: number): Promise<void> {
 		// Synchronous reservation: everything below this point may await, and a
-		// second create() for the same id must not race past the check.
-		if (this.terms.has(id) || this.starting.has(id)) return;
+		// second create() for the same id must not race past the check. A
+		// create() that lands while one is in flight REPLACES it (StrictMode
+		// remount does exactly this: mount → cleanup-kill → mount again with
+		// the same id). Marking the in-flight spawn abandoned makes IT exit
+		// silently when its shell arrives, and lets THIS call own the id —
+		// dropping this call instead left the renderer's xterm orphaned with
+		// no live process behind it ("cannot type", no output ever).
+		if (this.terms.has(id)) return;
+		if (this.starting.has(id)) {
+			this.abandoned.add(id);
+			this.starting.delete(id);
+		}
 		this.starting.add(id);
 		const send = (data: string): void => {
 			const wc = this.webContents();
@@ -92,9 +102,15 @@ export class PtyService {
 			const pty = await import("node-pty");
 			const shell = process.env.SHELL || "/bin/zsh";
 			// posix_spawnp fails if env contains undefined values — sanitize.
+			// npm_config_* variables are also dropped here: `npm run dev` exports
+			// npm_config_prefix (from the node install's etc/npmrc), which leaks
+			// into every login shell we spawn and makes nvm print its
+			// "not compatible with npm_config_prefix" warning on startup.
 			const env: Record<string, string> = {};
 			for (const [key, value] of Object.entries(process.env)) {
-				if (value !== undefined) env[key] = value;
+				if (value === undefined) continue;
+				if (key.startsWith("npm_config_")) continue;
+				env[key] = value;
 			}
 			env.TERM = "xterm-256color";
 			const spawnTerm = (): IPty =>
