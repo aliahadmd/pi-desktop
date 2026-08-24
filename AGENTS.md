@@ -20,16 +20,22 @@ this file is the working rulebook. Read both before changing anything.
 
 ```bash
 npm run typecheck   # strict TS, exactOptionalPropertyTypes
-npm test            # vitest unit suite (29 files, 191 passing as of 2026-08-25)
-npm run e2e         # Playwright _electron, 33 tests; builds and stages itself
+npm test            # vitest unit suite (30 files, 198 passing as of 2026-08-25)
+npm run e2e         # Playwright _electron, 34 tests; builds and stages itself
 npm audit --omit=dev && ./scripts/check-secrets.sh
 cd sidecar && uv run pytest -q && uv run mypy app/   # 14 passing
 ```
 
 Environment notes: cleanup tools (CleanMyMac-class) have been observed deleting
 files under `out/`/`release/` mid-build — one packaging failure is probably
-that, two in a row is real. If terminals fail with `posix_spawnp` errors, run
-`./scripts/setup-native.sh` (node-pty/Electron ABI mismatch), don't debug code.
+that, two in a row is real. Terminals failing with `posix_spawnp failed` are
+almost always node-pty's `spawn-helper` shipping without its execute bit
+(microsoft/node-pty#850), NOT an ABI mismatch: the app now repairs it at boot
+and retries once on spawn failure (`src/main/pty-native.ts`), and
+`npm run fix:pty` fixes a checkout by hand. Reach for
+`./scripts/setup-native.sh` only when the native module genuinely fails to
+*load* (a real Electron ABI mismatch), not when it loads and then fails to
+spawn.
 
 ## Conventions
 

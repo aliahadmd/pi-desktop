@@ -33,6 +33,7 @@ import {
 } from "../shared/pi";
 import { createDesktopTools } from "./pi/desktop-tools";
 import { PtyService } from "./pty-service";
+import { ensureSpawnHelperExecutable } from "./pty-native";
 import { createLogger, type Logger } from "./services/logging";
 import { setupAutoUpdater } from "./updater";
 import { ensureAppPaths, pruneOldLogs, resolveAppPaths } from "./services/paths";
@@ -303,6 +304,15 @@ app.whenReady()
 			log: (level, message) => logger?.[level]("main", message),
 		});
 		ptyService.register();
+		// node-pty 1.1.0 ships spawn-helper non-executable on macOS, which makes
+		// every terminal die with "posix_spawnp failed". Repair it at boot so the
+		// first terminal works; PtyService also retries on demand as a backstop.
+		const helperRepair = ensureSpawnHelperExecutable();
+		if (helperRepair.repaired) {
+			log.info("main", `repaired node-pty spawn-helper at ${helperRepair.path ?? "?"}`);
+		} else if (helperRepair.reason === "failed" || helperRepair.reason === "not-found") {
+			log.warn("main", `node-pty spawn-helper check: ${helperRepair.reason}`);
+		}
 
 		sidecar = new SidecarManager({
 			appSupportDir: app.getPath("userData"),

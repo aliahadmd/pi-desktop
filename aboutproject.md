@@ -46,8 +46,8 @@ The architecture has three layers:
 
 ```bash
 npm run typecheck          # strict TS across all configs
-npm test                   # 191 unit tests, 29 files (vitest)
-npm run e2e                # 33 e2e tests (Playwright _electron)
+npm test                   # 198 unit tests, 30 files (vitest)
+npm run e2e                # 34 e2e tests (Playwright _electron)
 cd sidecar && uv run pytest -q   # 14 pytest
 cd sidecar && uv run mypy app/   # strict type check
 ./scripts/check-secrets.sh       # credential scan
@@ -151,7 +151,7 @@ Remediated in `6dcb187` along with H-2, M-1, M-2 and M-7.
 |---|---|
 | Phases complete | 1–7 (chapters 1–33) |
 | IPC channels | 81, all typebox-validated |
-| Gates | typecheck clean · 191 unit (29 files) · 33 e2e · 14 sidecar pytest |
+| Gates | typecheck clean · 198 unit (30 files) · 34 e2e · 14 sidecar pytest |
 | Source | ~16.2k lines TS/TSX |
 | Pi version | pinned exactly at `0.84.2` |
 

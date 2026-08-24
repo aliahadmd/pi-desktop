@@ -21,8 +21,8 @@ timeline, and [AGENTS.md](AGENTS.md) for the working rulebook.
 | 6 (ch 28–30) | Projects: pinning, sort, create/open, sidebar project rows, top app bar | `piplan/Phase-6/STATUS.md` |
 | 7 (ch 31–33) | Appearance: theme engine (5 presets incl. light), UI scale, transparency, theme-aware syntax highlighting, richer history rows | `piplan/Phase-7/STATUS.md` |
 
-Verification at this commit: typecheck clean · **191 unit** tests (29 files) ·
-**33 e2e** · **14 sidecar pytest**.
+Verification at this commit: typecheck clean · **198 unit** tests (30 files) ·
+**34 e2e** · **14 sidecar pytest**.
 
 Five audit cycles are recorded in `pibugs/`; open items from the latest are
 listed under "Current state" in [aboutproject.md](aboutproject.md).

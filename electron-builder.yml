@@ -9,6 +9,10 @@ files:
 asarUnpack:
   - node_modules/node-pty/**
   - node_modules/better-sqlite3/**
+# node-pty ships spawn-helper without its execute bit (microsoft/node-pty#850);
+# electron-builder copies the mode verbatim, so restore it after packing or
+# every terminal in the shipped app dies with "posix_spawnp failed".
+afterPack: build/after-pack.cjs
 extraResources:
   # Python sidecar binary (built by sidecar/build.sh — see RELEASE.md)
   - from: sidecar/dist/pi-desktop-sidecar

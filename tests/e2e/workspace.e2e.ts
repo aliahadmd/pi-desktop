@@ -206,4 +206,34 @@ describe("workspace UI", () => {
 		await page.getByTestId("topbar-terminal").click();
 		expect(true).toBe(true);
 	}, 30_000);
+
+	it("starts a working shell instead of failing with posix_spawnp", async () => {
+		// Regression guard for the node-pty spawn-helper bug
+		// (microsoft/node-pty#850): the prebuilt helper ships without its
+		// execute bit, so every terminal died with "posix_spawnp failed".
+		// The app repairs the bit at boot and retries on spawn failure; this
+		// asserts a REAL shell renders, not the error text.
+		await page.getByTestId("topbar-terminal").click();
+		const xterm = page.locator(".xterm").first();
+		await xterm.waitFor({ timeout: 20_000 }).catch(() => undefined);
+
+		const screen = await page.waitForFunction(
+			() => {
+				const el = document.querySelector(".xterm-screen");
+				const text = el?.textContent ?? "";
+				// Either the failure message or genuine shell output settles it.
+				if (text.includes("failed to start") || text.includes("posix_spawnp")) {
+					return { ok: false, text: text.slice(0, 200) };
+				}
+				return text.trim().length > 0 ? { ok: true, text: text.slice(0, 200) } : false;
+			},
+			undefined,
+			{ timeout: 25_000 },
+		);
+
+		const result = (await screen.jsonValue()) as { ok: boolean; text: string };
+		expect(result.text).not.toContain("posix_spawnp");
+		expect(result.text).not.toContain("failed to start");
+		expect(result.ok).toBe(true);
+	}, 60_000);
 });
