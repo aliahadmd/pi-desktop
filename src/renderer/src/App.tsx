@@ -6,6 +6,11 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
 import ChatPage, { refreshState, type DockTab } from "./pages/ChatPage";
+import { applyTheme } from "./lib/apply-theme";
+import {
+	DEFAULT_THEME_ID,
+	isThemePresetId,
+} from "../../shared/theme";
 import type { AuthPromptEvent } from "../../shared/protocol";
 import { ModelsPage } from "./pages/ModelsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -66,6 +71,33 @@ export default function App(): React.JSX.Element {
 
 	useEffect(() => bindPiEvents(), []);
 
+	// Theme: read persisted preset once and apply before first interaction.
+	// Exposed setter lets Settings + the top-bar cycler switch live.
+	const [themeId, setThemeId] = useState<string>(DEFAULT_THEME_ID);
+	useEffect(() => {
+		void (async () => {
+			const r = await window.piDesktop.invoke({
+				type: "app.settings.get",
+				key: "theme",
+			});
+			if (r.ok && isThemePresetId(r.data)) {
+				setThemeId(r.data);
+				applyTheme(r.data);
+			}
+		})();
+	}, []);
+
+	function changeTheme(next: string): void {
+		if (!isThemePresetId(next)) return;
+		setThemeId(next);
+		applyTheme(next);
+		void window.piDesktop.invoke({
+			type: "app.settings.set",
+			key: "theme",
+			value: next,
+		});
+	}
+
 	useEffect(() => {
 		void (async () => {
 			// "Skip for now" must survive a relaunch: without a persisted flag the
@@ -114,6 +146,8 @@ export default function App(): React.JSX.Element {
 			<TopBar
 				sidebarHidden={sidebarCollapsed}
 				onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+				themeId={themeId}
+				onCycleTheme={changeTheme}
 				activeSessionId={activeSessionId}
 				dockTab={dockTab}
 				reviewCount={reviewCount}
@@ -233,7 +267,7 @@ export default function App(): React.JSX.Element {
 				onClose={() => setSheet(null)}
 				testId="sheet-settings"
 			>
-				<SettingsPage />
+				<SettingsPage themeId={themeId} onChangeTheme={changeTheme} />
 			</Sheet>
 			<Sheet
 				open={sheet === "trust"}

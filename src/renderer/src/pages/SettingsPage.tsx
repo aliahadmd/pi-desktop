@@ -11,6 +11,7 @@ import {
 	type PermissionMode,
 } from "../../../shared/pi";
 import { MODE_DESCRIPTION } from "../components/chat/ModePicker";
+import { THEME_PRESETS } from "../../../shared/theme";
 import { ScopedModelsEditor } from "./ScopedModelsEditor";
 import { PackagesPanel } from "./PackagesPanel";
 
@@ -24,7 +25,13 @@ interface PiSettings {
 	[key: string]: unknown;
 }
 
-export function SettingsPage(): React.JSX.Element {
+export function SettingsPage({
+	themeId,
+	onChangeTheme,
+}: {
+	themeId: string;
+	onChangeTheme(next: string): void;
+}): React.JSX.Element {
 	const [settings, setSettings] = useState<PiSettings>({});
 	const [saving, setSaving] = useState(false);
 	const [saved, setSaved] = useState(false);
@@ -151,6 +158,38 @@ export function SettingsPage(): React.JSX.Element {
 
 				<div className="mt-8 border-t border-neutral-800 pt-5">
 					<ScopedModelsEditor />
+				</div>
+
+				<div className="mt-8 border-t border-neutral-800 pt-5">
+					<div className="mb-2 text-sm text-neutral-200">Appearance</div>
+					<SettingRow
+						label="Theme"
+						hint="Applies immediately and persists. Code blocks follow the theme."
+					>
+						<div className="flex flex-wrap gap-2">
+							{THEME_PRESETS.map((p) => (
+								<button
+									key={p.id}
+									type="button"
+									data-testid={`theme-${p.id}`}
+									onClick={() => onChangeTheme(p.id)}
+									className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs transition-standard ${
+										themeId === p.id
+											? "border-app-accent bg-app-accent/10 text-app-text"
+											: "border-app-border text-app-muted hover:text-app-text"
+									}`}
+								>
+									<span className="flex overflow-hidden rounded-sm" aria-hidden="true">
+										<span className="h-4 w-2" style={{ background: p.vars.bg }} />
+										<span className="h-4 w-2" style={{ background: p.vars.surface2 }} />
+										<span className="h-4 w-2" style={{ background: p.vars.accent }} />
+										<span className="h-4 w-2" style={{ background: p.vars.text }} />
+									</span>
+									{p.label}
+								</button>
+							))}
+						</div>
+					</SettingRow>
 				</div>
 
 				<div className="mt-8 border-t border-neutral-800 pt-5">

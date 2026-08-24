@@ -1,12 +1,46 @@
 @import "tailwindcss";
 
+/* ---- Theme tokens (phase 7, ch31) ----
+   Semantic variables written by applyTheme() from src/shared/theme.ts.
+   Defaults below are the pi-dark preset; JS overrides at boot/switch. */
+:root {
+	--pi-bg: #141416;
+	--pi-surface: #1a1a1e;
+	--pi-surface-2: #232327;
+	--pi-text: #e7e7ea;
+	--pi-muted: #8b8b93;
+	--pi-faint: #5c5c64;
+	--pi-border: #2e2e33;
+	--pi-accent: #3b82f6;
+	--pi-success: #22c55e;
+	--pi-danger: #ef4444;
+	--pi-warning: #f59e0b;
+	--pi-user-bubble: rgba(30, 58, 138, 0.7);
+	--bg-alpha: 1;
+}
+
+/* Map tokens into Tailwind v4 utilities (bg-app-surface, text-app-muted…). */
+@theme inline {
+	--color-app-bg: var(--pi-bg);
+	--color-app-surface: var(--pi-surface);
+	--color-app-surface2: var(--pi-surface-2);
+	--color-app-text: var(--pi-text);
+	--color-app-muted: var(--pi-muted);
+	--color-app-faint: var(--pi-faint);
+	--color-app-border: var(--pi-border);
+	--color-accent: var(--pi-accent);
+	--color-success: var(--pi-success);
+	--color-danger: var(--pi-danger);
+	--color-warning: var(--pi-warning);
+}
+
 html,
 body,
 #root {
 	height: 100%;
 	margin: 0;
-	background: #141416;
-	color: #e7e7ea;
+	background: var(--pi-bg);
+	color: var(--pi-text);
 	font-family:
 		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
 }
@@ -37,10 +71,10 @@ body,
 	}
 }
 
-/* ---- Scrollbars (chapter 18 polish) ---- */
+/* ---- Scrollbars (chapter 18 polish; tokenized phase 7) ---- */
 * {
 	scrollbar-width: thin;
-	scrollbar-color: #2e2e33 transparent;
+	scrollbar-color: var(--pi-border) transparent;
 }
 ::-webkit-scrollbar {
 	width: 8px;
@@ -50,13 +84,13 @@ body,
 	background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-	background: #2e2e33;
+	background: var(--pi-border);
 	border-radius: 4px;
 	border: 2px solid transparent;
 	background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-	background: #45454c;
+	background: var(--pi-faint);
 	border: 2px solid transparent;
 	background-clip: padding-box;
 }

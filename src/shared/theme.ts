@@ -157,7 +157,8 @@ export function isThemePresetId(value: unknown): value is string {
 }
 
 export function getPreset(id: string): ThemePreset {
-	return THEME_PRESETS.find((p) => p.id === id) ?? THEME_PRESETS[0];
+	const found = THEME_PRESETS.find((p) => p.id === id);
+	return found ?? THEME_PRESETS[0]!;
 }
 
 /** Map a preset id to the shiki theme name used for code blocks. */
