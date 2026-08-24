@@ -96,7 +96,11 @@ export default function App(): React.JSX.Element {
 		void window.piDesktop.invoke({
 			type: "app.settings.set",
 			key: "theme",
-			value: next,
+			// The channel takes a JSON-encoded value (main does JSON.parse).
+			// Passing the bare id threw in the store and, because that write is
+			// wrapped in a guard that only logs, the theme silently never
+			// persisted across restarts.
+			value: JSON.stringify(next),
 		});
 	}
 
