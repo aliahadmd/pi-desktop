@@ -265,18 +265,18 @@ export default function ChatPage({
 		<div className="flex h-full min-h-0 flex-col overflow-hidden">
 			{/* Open-session chips — only when more than one is open */}
 			{sessionList.length > 1 && (
-				<div className="flex h-8 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
+				<div className="flex h-8 shrink-0 items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-neutral-800 px-2 [scrollbar-width:thin]">
 					{sessionList.map((s) => (
 						<button
 							key={s.id}
 							type="button"
 							onClick={() => setActive(s.id)}
-							className={`group flex items-center gap-1.5 rounded px-2 py-1 text-[11px] transition-standard ${
+							className={`group flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-[11px] transition-standard ${
 								s.id === activeId
 									? "bg-neutral-800 text-neutral-100"
 									: "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-300"
 							}`}
-						>
+							>
 							<span
 								className={`h-1.5 w-1.5 rounded-full ${
 									s.dead !== undefined
@@ -288,14 +288,19 @@ export default function ChatPage({
 							/>
 							{/* Tab label: pi-derived session title when set (/name),
 						    else the first user message (the task), else folder. */}
-						{s.sessionName ??
-							(() => {
-								const firstUser = s.blocks.find((b) => b.kind === "user");
-								const t = firstUser !== undefined && "text" in firstUser
-									? titleFromPrompt(firstUser.text)
-									: "";
-								return t.length > 0 ? t : s.cwd.split("/").filter(Boolean).pop() ?? s.cwd;
-							})()}
+						{/* One-liner: never wrap; truncate with ellipsis. */}
+						<span className="max-w-40 truncate">
+							{s.sessionName ??
+								(() => {
+									const firstUser = s.blocks.find((b) => b.kind === "user");
+									const t = firstUser !== undefined && "text" in firstUser
+										? titleFromPrompt(firstUser.text)
+										: "";
+									return t.length > 0
+										? t
+										: s.cwd.split("/").filter(Boolean).pop() ?? s.cwd;
+								})()}
+						</span>
 							<span
 								role="button"
 								tabIndex={0}
