@@ -6,14 +6,24 @@
 import { memo, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useThemeId } from "../../lib/theme-context";
+import { shikiThemeFor } from "../../../../shared/theme";
 
 let shikiHighlighter: Promise<import("shiki").Highlighter> | null = null;
+
+/** Every theme any preset can ask for; shiki dedupes shared grammars. */
+const SHIKI_THEMES = [
+	"github-dark",
+	"github-light",
+	"catppuccin-mocha",
+	"solarized-light",
+] as const;
 
 async function getHighlighter(): Promise<import("shiki").Highlighter> {
 	if (shikiHighlighter === null) {
 		const promise = import("shiki").then((shiki) =>
 			shiki.createHighlighter({
-				themes: ["github-dark"],
+				themes: [...SHIKI_THEMES],
 				langs: ["ts", "js", "json", "bash", "python", "md"],
 			})
 		);
@@ -26,11 +36,19 @@ async function getHighlighter(): Promise<import("shiki").Highlighter> {
 }
 
 function CodeBlock({ code, lang }: { code: string; lang: string }): ReactNode {
+	const themeId = useThemeId();
+	const shikiTheme = shikiThemeFor(themeId);
 	const [html, setHtml] = useState<string | null>(null);
 	useEffect(() => {
 		let cancelled = false;
 		void getHighlighter()
-			.then((h) => h.codeToHtml(code, { lang: lang || "text", theme: "github-dark" }))
+			.then((h) =>
+				h.codeToHtml(code, {
+					lang: lang || "text",
+					themes: { dark: shikiTheme, light: shikiTheme },
+					defaultColor: false,
+				}),
+			)
 			.then((out) => {
 				if (!cancelled) setHtml(out);
 			})
@@ -38,17 +56,17 @@ function CodeBlock({ code, lang }: { code: string; lang: string }): ReactNode {
 		return () => {
 			cancelled = true;
 		};
-	}, [code, lang]);
+	}, [code, lang, shikiTheme]);
 	if (html === null) {
 		return (
-			<pre className="overflow-x-auto rounded bg-neutral-950 p-3 text-xs text-neutral-200">
+			<pre className="overflow-x-auto rounded bg-app-surface p-3 text-xs text-app-text">
 				<code>{code}</code>
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-x-auto rounded [&_pre]:bg-neutral-950 [&_pre]:p-3 [&_code]:text-xs"
+			className="overflow-x-auto rounded bg-app-surface [&_pre]:bg-transparent [&_pre]:p-3 [&_code]:text-xs"
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);

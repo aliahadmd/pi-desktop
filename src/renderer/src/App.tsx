@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
 import ChatPage, { refreshState, type DockTab } from "./pages/ChatPage";
 import { applyTheme } from "./lib/apply-theme";
+import { ThemeContext } from "./lib/theme-context";
 import {
 	DEFAULT_THEME_ID,
 	isThemePresetId,
@@ -140,6 +141,7 @@ export default function App(): React.JSX.Element {
 	}, []);
 
 	return (
+		<ThemeContext.Provider value={themeId}>
 		<div className="flex h-full flex-col overflow-hidden">
 			{/* Top app bar: owns the sidebar toggle + window drag region.
 			    Visible always — the restore control survives a hidden sidebar. */}
@@ -343,5 +345,6 @@ export default function App(): React.JSX.Element {
 			)}
 			</div>
 		</div>
+		</ThemeContext.Provider>
 	);
 }
