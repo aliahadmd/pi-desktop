@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { bindPiEvents, useSessions } from "./stores/pi-sessions";
-import ChatPage, { refreshState } from "./pages/ChatPage";
+import ChatPage, { refreshState, type DockTab } from "./pages/ChatPage";
 import type { AuthPromptEvent } from "../../shared/protocol";
 import { ModelsPage } from "./pages/ModelsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -24,8 +24,17 @@ export default function App(): React.JSX.Element {
 	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [onboardingChecked, setOnboardingChecked] = useState(false);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+	const [dockTab, setDockTab] = useState<DockTab>(null);
+	const [compactOpen, setCompactOpen] = useState(false);
 	const [sheet, setSheet] = useState<SheetKind>(null);
 	const activeSessionId = useSessions((s) => s.activeId);
+	const sessions = useSessions((s) => s.sessions);
+	const reviewCount =
+		activeSessionId !== null
+			? (sessions[activeSessionId]?.blocks.filter(
+					(b) => b.kind === "tool" && ["edit", "write"].includes(b.toolName),
+				).length ?? 0)
+			: 0;
 	const [loginPrompt, setLoginPrompt] = useState<AuthPromptEvent | null>(null);
 	const [loginValue, setLoginValue] = useState("");
 
@@ -105,6 +114,26 @@ export default function App(): React.JSX.Element {
 			<TopBar
 				sidebarHidden={sidebarCollapsed}
 				onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+				activeSessionId={activeSessionId}
+				dockTab={dockTab}
+				reviewCount={reviewCount}
+				onDockToggle={(tab) => setDockTab(dockTab === tab ? null : tab)}
+				onCompact={() => {
+					if (activeSessionId !== null) setCompactOpen(true);
+				}}
+				onExport={(format) => {
+					if (activeSessionId === null) return;
+					void window.piDesktop
+						.invoke({
+							type: format === "html" ? "session.export_html" : "session.export_jsonl",
+							sessionId: activeSessionId,
+						})
+						.then((r) => {
+							if (!r.ok) {
+								useSessions.getState().pushErrorNotice(activeSessionId, r.error.message);
+							}
+						});
+				}}
 			/>
 
 			<div className="flex min-h-0 flex-1 overflow-hidden">
@@ -150,7 +179,13 @@ export default function App(): React.JSX.Element {
 					)}
 				</AnimatePresence>
 
-				<ChatPage onOpenSheet={(kind) => setSheet(kind)} />
+				<ChatPage
+					onOpenSheet={(kind) => setSheet(kind)}
+					dockTab={dockTab}
+					setDockTab={setDockTab}
+					compactOpen={compactOpen}
+					setCompactOpen={setCompactOpen}
+				/>
 
 
 			</main>

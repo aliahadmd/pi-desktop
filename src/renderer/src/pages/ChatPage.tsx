@@ -5,18 +5,7 @@
 import { useEffect, useState } from "react";
 import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
-import {
-	FileJson,
-	FolderOpen,
-	Minimize2,
-	Network,
-	Plus,
-	SquareSlash,
-	SquareTerminal,
-	Search,
-	Upload,
-	X,
-} from "lucide-react";
+import { Plus, X } from "lucide-react";
 import type {
 	PiImageInput,
 	PiModelInfo,
@@ -39,8 +28,9 @@ import {
 import { TerminalPanel } from "../components/workspace/TerminalPanel";
 import { CommandPalette } from "../components/chat/CommandPalette";
 
-type DockTab = "files" | "review" | "commands" | "tree" | "terminal" | null;
 type SheetKind = "models" | "settings" | "trust" | "browse" | "packages";
+
+export type DockTab = "files" | "review" | "commands" | "tree" | "terminal" | null;
 
 export function refreshState(sessionId: string): void {
 	void window.piDesktop
@@ -52,8 +42,16 @@ export function refreshState(sessionId: string): void {
 
 export default function ChatPage({
 	onOpenSheet,
+	dockTab,
+	setDockTab,
+	compactOpen,
+	setCompactOpen,
 }: {
 	onOpenSheet?(kind: SheetKind): void;
+	dockTab: DockTab;
+	setDockTab(updater: DockTab | ((prev: DockTab) => DockTab)): void;
+	compactOpen: boolean;
+	setCompactOpen(open: boolean): void;
 }): React.JSX.Element {
 	const sessions = useSessions((s) => s.sessions);
 	const activeId = useSessions((s) => s.activeId);
@@ -65,14 +63,12 @@ export default function ChatPage({
 
 	const [creating, setCreating] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
-	const [dockTab, setDockTab] = useState<DockTab>(null);
 	const [treeRefreshKey, setTreeRefreshKey] = useState(0);
 	const [terminalTabs, setTerminalTabs] = useState<Array<{ id: string; label: string }>>([
 		{ id: "term-1", label: "Terminal 1" },
 	]);
 	const [activeTermTab, setActiveTermTab] = useState(0);
 	const [nextTermNum, setNextTermNum] = useState(2);
-	const [compactOpen, setCompactOpen] = useState(false);
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [compactInstructions, setCompactInstructions] = useState("");
 	const [compacting, setCompacting] = useState(false);
@@ -154,7 +150,7 @@ export default function ChatPage({
 			const key = e.key.toLowerCase();
 			if ((e.metaKey || e.ctrlKey) && key === "j") {
 				e.preventDefault();
-				setDockTab((prev) => (prev === "terminal" ? null : "terminal"));
+				setDockTab((prev: DockTab) => (prev === "terminal" ? null : "terminal"));
 			}
 			if ((e.metaKey || e.ctrlKey) && key === "k") {
 				e.preventDefault();
@@ -478,84 +474,6 @@ export default function ChatPage({
 							</motion.div>
 							</AnimatePresence>
 					)}
-
-					{/* Action bar (phase 6): horizontal icon strip at the top of the
-					    main pane — dock toggles + Compact/Export live here, keeping
-					    the full window height for content. */}
-					<div className="flex h-10 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
-						{([
-							{ tab: "files" as const, Icon: FolderOpen, title: "Files" },
-							{ tab: "review" as const, Icon: Search, title: `Review (${String(reviewCount)})` },
-							{ tab: "commands" as const, Icon: SquareSlash, title: "Commands" },
-							{ tab: "tree" as const, Icon: Network, title: "Tree" },
-							{ tab: "terminal" as const, Icon: SquareTerminal, title: "Terminal" },
-						] as const).map(({ tab, Icon, title }) => (
-							<button
-								key={tab}
-								type="button"
-								data-testid={`actionbar-${tab}`}
-								onClick={() => setDockTab(dockTab === tab ? null : tab)}
-								title={title}
-								className={`relative flex h-7 w-7 items-center justify-center rounded transition-standard ${
-									dockTab === tab
-										? "bg-neutral-800 text-blue-400"
-										: "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-300"
-								}`}
-							>
-								<Icon size={15} strokeWidth={1.75} />
-								{tab === "review" && reviewCount > 0 && (
-									<span className="absolute -right-0.5 -top-0.5 rounded-full bg-red-600 px-1 text-[8px] leading-tight text-white">
-										{reviewCount}
-									</span>
-								)}
-							</button>
-						))}
-
-						<div className="mx-1 h-4 w-px bg-neutral-800" />
-
-						<button
-							type="button"
-							data-testid="actionbar-compact"
-							onClick={() => setCompactOpen(true)}
-							title="Compact context"
-							className="flex h-7 w-7 items-center justify-center rounded text-neutral-500 transition-standard hover:bg-neutral-900 hover:text-neutral-300"
-						>
-							<Minimize2 size={15} strokeWidth={1.75} />
-						</button>
-
-						<div className="ml-auto flex items-center gap-1">
-							<button
-								type="button"
-								data-testid="actionbar-export-html"
-								title="Export session (HTML)"
-								onClick={() => {
-									void window.piDesktop
-										.invoke({ type: "session.export_html", sessionId: active.id })
-										.then((r) => {
-											if (!r.ok) pushErrorNotice(active.id, r.error.message);
-										});
-								}}
-								className="flex h-7 w-7 items-center justify-center rounded text-neutral-500 transition-standard hover:bg-neutral-900 hover:text-neutral-300"
-							>
-								<Upload size={15} strokeWidth={1.75} />
-							</button>
-							<button
-								type="button"
-								data-testid="actionbar-export-jsonl"
-								title="Export session (JSONL)"
-								onClick={() => {
-									void window.piDesktop
-										.invoke({ type: "session.export_jsonl", sessionId: active.id })
-										.then((r) => {
-											if (!r.ok) pushErrorNotice(active.id, r.error.message);
-										});
-								}}
-								className="flex h-7 w-7 items-center justify-center rounded text-neutral-500 transition-standard hover:bg-neutral-900 hover:text-neutral-300"
-							>
-								<FileJson size={15} strokeWidth={1.75} />
-							</button>
-						</div>
-					</div>
 
 				</div>
 
