@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
 import {
+	FileJson,
 	FolderOpen,
 	Minimize2,
 	Network,
@@ -478,47 +479,30 @@ export default function ChatPage({
 							</AnimatePresence>
 					)}
 
-					{/* Full-height right rail (phase 6): dock toggles live at the
-					    window edge so shrinking the window never squeezes the
-					    transcript; Compact/Export moved here from the old bottom
-					    control row. */}
-					<div className="flex w-11 shrink-0 flex-col items-center gap-1 border-l border-neutral-800 py-2">
+					{/* Action bar (phase 6): horizontal icon strip at the top of the
+					    main pane — dock toggles + Compact/Export live here, keeping
+					    the full window height for content. */}
+					<div className="flex h-10 shrink-0 items-center gap-1 border-b border-neutral-800 px-2">
 						{([
 							{ tab: "files" as const, Icon: FolderOpen, title: "Files" },
 							{ tab: "review" as const, Icon: Search, title: `Review (${String(reviewCount)})` },
 							{ tab: "commands" as const, Icon: SquareSlash, title: "Commands" },
 							{ tab: "tree" as const, Icon: Network, title: "Tree" },
 							{ tab: "terminal" as const, Icon: SquareTerminal, title: "Terminal" },
-							{ tab: "compact" as const, Icon: Minimize2, title: "Compact context" },
-							{ tab: "export" as const, Icon: Upload, title: "Export session (HTML)" },
 						] as const).map(({ tab, Icon, title }) => (
 							<button
 								key={tab}
 								type="button"
-								data-testid={`rail-${tab}`}
-								onClick={() => {
-									if (tab === "compact") {
-										setCompactOpen(true);
-										return;
-									}
-									if (tab === "export") {
-										void window.piDesktop
-											.invoke({ type: "session.export_html", sessionId: active.id })
-											.then((r) => {
-												if (!r.ok) pushErrorNotice(active.id, r.error.message);
-											});
-										return;
-									}
-									setDockTab(dockTab === tab ? null : tab);
-								}}
+								data-testid={`actionbar-${tab}`}
+								onClick={() => setDockTab(dockTab === tab ? null : tab)}
 								title={title}
-								className={`relative flex h-8 w-8 items-center justify-center rounded transition-standard ${
+								className={`relative flex h-7 w-7 items-center justify-center rounded transition-standard ${
 									dockTab === tab
 										? "bg-neutral-800 text-blue-400"
-										: "text-neutral-600 hover:bg-neutral-900 hover:text-neutral-300"
+										: "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-300"
 								}`}
 							>
-								<Icon size={16} strokeWidth={1.75} />
+								<Icon size={15} strokeWidth={1.75} />
 								{tab === "review" && reviewCount > 0 && (
 									<span className="absolute -right-0.5 -top-0.5 rounded-full bg-red-600 px-1 text-[8px] leading-tight text-white">
 										{reviewCount}
@@ -526,6 +510,51 @@ export default function ChatPage({
 								)}
 							</button>
 						))}
+
+						<div className="mx-1 h-4 w-px bg-neutral-800" />
+
+						<button
+							type="button"
+							data-testid="actionbar-compact"
+							onClick={() => setCompactOpen(true)}
+							title="Compact context"
+							className="flex h-7 w-7 items-center justify-center rounded text-neutral-500 transition-standard hover:bg-neutral-900 hover:text-neutral-300"
+						>
+							<Minimize2 size={15} strokeWidth={1.75} />
+						</button>
+
+						<div className="ml-auto flex items-center gap-1">
+							<button
+								type="button"
+								data-testid="actionbar-export-html"
+								title="Export session (HTML)"
+								onClick={() => {
+									void window.piDesktop
+										.invoke({ type: "session.export_html", sessionId: active.id })
+										.then((r) => {
+											if (!r.ok) pushErrorNotice(active.id, r.error.message);
+										});
+								}}
+								className="flex h-7 w-7 items-center justify-center rounded text-neutral-500 transition-standard hover:bg-neutral-900 hover:text-neutral-300"
+							>
+								<Upload size={15} strokeWidth={1.75} />
+							</button>
+							<button
+								type="button"
+								data-testid="actionbar-export-jsonl"
+								title="Export session (JSONL)"
+								onClick={() => {
+									void window.piDesktop
+										.invoke({ type: "session.export_jsonl", sessionId: active.id })
+										.then((r) => {
+											if (!r.ok) pushErrorNotice(active.id, r.error.message);
+										});
+								}}
+								className="flex h-7 w-7 items-center justify-center rounded text-neutral-500 transition-standard hover:bg-neutral-900 hover:text-neutral-300"
+							>
+								<FileJson size={15} strokeWidth={1.75} />
+							</button>
+						</div>
 					</div>
 
 				</div>
