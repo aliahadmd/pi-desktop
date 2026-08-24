@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { playSoundIfEnabled, type SoundEvent } from "../services/sound";
 import { AnimatePresence, motion } from "motion/react";
 import { Plus, X } from "lucide-react";
+import { titleFromPrompt } from "../lib/session-title";
 import type {
 	PiImageInput,
 	PiModelInfo,
@@ -285,11 +286,16 @@ export default function ChatPage({
 											: "bg-blue-500 animate-pulse"
 								}`}
 							/>
-							{/* Tab label: the session's own title when pi has derived
-						    one, else the first message snippet, else the project
-						    folder — so two sessions in one project stay
-						    distinguishable. */}
-						{s.sessionName ?? s.cwd.split("/").filter(Boolean).pop() ?? s.cwd}
+							{/* Tab label: pi-derived session title when set (/name),
+						    else the first user message (the task), else folder. */}
+						{s.sessionName ??
+							(() => {
+								const firstUser = s.blocks.find((b) => b.kind === "user");
+								const t = firstUser !== undefined && "text" in firstUser
+									? titleFromPrompt(firstUser.text)
+									: "";
+								return t.length > 0 ? t : s.cwd.split("/").filter(Boolean).pop() ?? s.cwd;
+							})()}
 							<span
 								role="button"
 								tabIndex={0}
