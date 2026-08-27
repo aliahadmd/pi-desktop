@@ -20,7 +20,7 @@ from .db import check_wal, connect
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 log = logging.getLogger("sidecar")
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 conn: sqlite3.Connection | None = None
 
