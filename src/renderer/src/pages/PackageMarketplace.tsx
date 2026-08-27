@@ -1,6 +1,10 @@
 /**
- * Package Marketplace (phase 4): browse, search, and install pi packages
- * from npm. Full-window sheet with categorized listings.
+ * Package Marketplace (phase 4): browse, search, and install pi packages.
+ * The catalog comes from the npm registry `pi-package` keyword search — the
+ * same data source as pi.dev/packages — with monthly downloads and kind
+ * chips (extension/skill/prompt/theme). Manual source installs (npm:, git:,
+ * URL, local path) live here too; every install is gated by the trust
+ * interstitial.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { NpmSearchResult } from "../../../shared/pi";
@@ -12,14 +16,18 @@ interface InstalledPackage {
 	installedPath?: string;
 }
 
-function categorize(_name: string, desc: string): string {
-	const d = desc.toLowerCase();
-	if (d.includes("skill") || d.includes("agent")) return "Skills & Agents";
-	if (d.includes("ui") || d.includes("theme") || d.includes("footer") || d.includes("tweak")) return "UI & Themes";
-	if (d.includes("web") || d.includes("search") || d.includes("browser") || d.includes("fetch")) return "Web & Search";
-	if (d.includes("subagent") || d.includes("task") || d.includes("delegate")) return "Workflow";
-	if (d.includes("terminal") || d.includes("cmux") || d.includes("tool")) return "Developer Tools";
-	return "Utilities";
+const KIND_ORDER = ["extension", "skill", "prompt", "theme"] as const;
+type KindFilter = "all" | (typeof KIND_ORDER)[number] | "package";
+
+function kindsOf(keywords: string[]): string[] {
+	const kinds = KIND_ORDER.filter((k) => keywords.includes(k));
+	return kinds.length > 0 ? [...kinds] : ["package"];
+}
+
+function formatDownloads(n: number): string {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M/mo`;
+	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K/mo`;
+	return `${n}/mo`;
 }
 
 function timeAgo(dateStr: string): string {
@@ -32,14 +40,27 @@ function timeAgo(dateStr: string): string {
 	}
 }
 
+/** Catalog rows arm the interstitial with a bare npm name; the manual input
+ * may carry an explicit source (npm:, git:, https:, /path, ./path). */
+function toSource(name: string): string {
+	return /^[a-z][a-z0-9+.-]*:/i.test(name) || name.startsWith("/") || name.startsWith(".")
+		? name
+		: `npm:${name}`;
+}
+
+const PAGE = 60;
+
 export function PackageMarketplace(): React.JSX.Element {
 	const [results, setResults] = useState<NpmSearchResult[]>([]);
 	const [installed, setInstalled] = useState<InstalledPackage[]>([]);
 	const [filter, setFilter] = useState("");
+	const [kind, setKind] = useState<KindFilter>("all");
+	const [shown, setShown] = useState(PAGE);
 	const [searching, setSearching] = useState(true);
 	const [installing, setInstalling] = useState<string | null>(null);
-	/** Non-null: the trust interstitial is up for this package (audit 6 M-24). */
+	/** Non-null: the trust interstitial is up for this package/source (audit 6 M-24). */
 	const [pendingInstall, setPendingInstall] = useState<string | null>(null);
+	const [manualSource, setManualSource] = useState("");
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -61,38 +82,34 @@ export function PackageMarketplace(): React.JSX.Element {
 	}, [load]);
 
 	const installedSources = new Set(installed.map((p) => p.source));
+	const text = filter.trim().toLowerCase();
 	const filtered = results.filter(
 		(r) =>
-			r.name.toLowerCase().includes(filter.toLowerCase()) ||
-			r.description.toLowerCase().includes(filter.toLowerCase())
+			(kind === "all" || kindsOf(r.keywords).includes(kind)) &&
+			(text.length === 0 ||
+				r.name.toLowerCase().includes(text) ||
+				r.description.toLowerCase().includes(text))
 	);
-	const categories = new Map<string, NpmSearchResult[]>();
-	for (const r of filtered) {
-		const cat = categorize(r.name, r.description);
-		const list = categories.get(cat) ?? [];
-		list.push(r);
-		groups_set(categories, cat, list);
-	}
-	function groups_set(map: Map<string, NpmSearchResult[]>, key: string, val: NpmSearchResult[]): void {
-		map.set(key, val);
-	}
+	const limit = text.length > 0 || kind !== "all" ? 250 : shown;
+	const visible = filtered.slice(0, limit);
 
-	// Marketplace installs go through the SAME trust interstitial as
-	// PackagesPanel (audit 6 M-24): a pi package is arbitrary code execution,
+	// Marketplace installs go through the SAME trust interstitial as the manual
+	// source install (audit 6 M-24): a pi package is arbitrary code execution,
 	// so one-click install from a browse surface was the wrong default.
 	async function confirmInstall(): Promise<void> {
 		if (pendingInstall === null) return;
-		const name = pendingInstall;
-		setInstalling(name);
+		const source = toSource(pendingInstall);
+		setInstalling(source);
 		setError(null);
 		setMessage(null);
 		try {
 			const result = await window.piDesktop.invoke({
 				type: "packages.install",
-				source: `npm:${name}`,
+				source,
 			});
 			if (result.ok) {
-				setMessage(`Installed ${name}. Restart sessions to load.`);
+				setMessage(`Installed ${source}. Restart sessions to load.`);
+				setManualSource("");
 				await load();
 			} else {
 				setError(result.error.message);
@@ -131,8 +148,18 @@ export function PackageMarketplace(): React.JSX.Element {
 				</p>
 
 				{error !== null && (
-					<div className="mt-3 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">
-						{error}
+					<div className="mt-3 flex items-center gap-2 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">
+						<span className="min-w-0 flex-1">{error}</span>
+						<button
+							type="button"
+							onClick={() => {
+								setError(null);
+								void load();
+							}}
+							className="shrink-0 rounded bg-neutral-800 px-2.5 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700"
+						>
+							Retry
+						</button>
 					</div>
 				)}
 				{message !== null && (
@@ -149,14 +176,33 @@ export function PackageMarketplace(): React.JSX.Element {
 					className="mt-5 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
 				/>
 
-				{/* Trust interstitial (M-24): same gate PackagesPanel enforces. */}
+				{/* Kind filter */}
+				<div className="mt-3 flex flex-wrap gap-1.5">
+					{(["all", ...KIND_ORDER, "package"] as KindFilter[]).map((k) => (
+						<button
+							key={k}
+							type="button"
+							onClick={() => setKind(k)}
+							className={`rounded-full px-3 py-1 text-[11px] capitalize ${
+								kind === k
+									? "bg-blue-600 text-on-accent"
+									: "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+							}`}
+						>
+							{k === "all" ? "All" : `${k}s`}
+						</button>
+					))}
+				</div>
+
+				{/* Trust interstitial (M-24): catalog rows and the manual install
+				    input both arm this same gate. */}
 				{pendingInstall !== null && (
 					<div
 						className="mt-4 rounded border border-amber-900 bg-amber-950/40 p-3"
 						data-testid="marketplace-trust-interstitial"
 					>
 						<div className="text-xs font-medium text-amber-200">Trust this package?</div>
-						<p className="mt-1 font-mono text-[10px] text-neutral-300">npm:{pendingInstall}</p>
+						<p className="mt-1 font-mono text-[10px] text-neutral-300">{toSource(pendingInstall)}</p>
 						<p className="mt-1 text-[10px] text-neutral-400">
 							Packages execute arbitrary code and can instruct the model to run anything.
 						</p>
@@ -204,7 +250,32 @@ export function PackageMarketplace(): React.JSX.Element {
 					</div>
 				)}
 
-				{/* Categories */}
+				{/* Manual source install (moved out of Settings → here). */}
+				<div className="mt-6 rounded-lg border border-neutral-800 bg-app-surface/50 p-4">
+					<div className="text-sm text-neutral-200">Install from source</div>
+					<div className="mt-0.5 text-[10px] text-neutral-500">
+						npm:, git:, URL or local path sources. Extensions run with full system access — review
+						before installing.
+					</div>
+					<div className="mt-2 flex gap-1.5">
+						<input
+							value={manualSource}
+							onChange={(e) => setManualSource(e.target.value)}
+							placeholder="npm:@scope/pkg@1.0 | git:github.com/user/repo | /path"
+							className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 font-mono text-[11px] outline-none focus:border-blue-500"
+						/>
+						<button
+							type="button"
+							disabled={installing !== null || manualSource.trim().length === 0}
+							onClick={() => setPendingInstall(manualSource.trim())}
+							className="rounded bg-blue-600 px-3 py-1.5 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
+						>
+							Install…
+						</button>
+					</div>
+				</div>
+
+				{/* Catalog */}
 				{searching ? (
 					<div className="mt-8 flex flex-col gap-3">
 						{[1, 2, 3, 4, 5].map((i) => (
@@ -212,55 +283,76 @@ export function PackageMarketplace(): React.JSX.Element {
 						))}
 					</div>
 				) : (
-					[...categories.entries()].map(([cat, list]) => (
-						<div key={cat} className="mt-8">
-							<h3 className="mb-3 text-sm font-semibold text-neutral-200">{cat}</h3>
-							<div className="flex flex-col gap-2">
-								{list.map((pkg) => {
-									const isInstalled = installedSources.has(`npm:${pkg.name}`);
-									return (
-										<div
-											key={pkg.name}
-											className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-app-surface/50 px-4 py-3"
-										>
-											<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-sm font-bold text-accent-strong">
-												{pkg.name.replace(/[^a-zA-Z]/g, "").slice(0, 1).toUpperCase()}
-											</span>
-											<div className="min-w-0 flex-1">
-												<div className="flex items-center gap-2">
-													<span className="text-sm font-medium text-neutral-100">{pkg.name}</span>
-													<span className="font-mono text-[9px] text-neutral-600">v{pkg.version}</span>
-												</div>
-												<p className="mt-0.5 truncate text-xs text-neutral-500">{pkg.description}</p>
-											</div>
-											<span className="shrink-0 font-mono text-[9px] text-neutral-700">
-												{timeAgo(pkg.date)}
-											</span>
-											{isInstalled ? (
-												<button
-													type="button"
-													disabled={installing === `npm:${pkg.name}`}
-													onClick={() => void remove(`npm:${pkg.name}`)}
-													className="shrink-0 rounded bg-neutral-800 px-3 py-1 text-xs text-neutral-400 hover:bg-danger-soft hover:text-danger disabled:opacity-40"
-												>
-													Remove
-												</button>
-											) : (
-												<button
-													type="button"
-													disabled={installing === pkg.name}
-													onClick={() => setPendingInstall(pkg.name)}
-													className="shrink-0 rounded bg-blue-600 px-3 py-1 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
-												>
-													Install…
-												</button>
-											)}
-										</div>
-									);
-								})}
-							</div>
+					<>
+						<div className="mt-6 mb-3 text-xs text-neutral-500">
+							{filtered.length.toLocaleString()} packages
 						</div>
-					))
+						<div className="flex flex-col gap-2">
+							{visible.map((pkg) => {
+								const isInstalled = installedSources.has(`npm:${pkg.name}`);
+								const kinds = kindsOf(pkg.keywords);
+								return (
+									<div
+										key={pkg.name}
+										className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-app-surface/50 px-4 py-3"
+									>
+										<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-sm font-bold text-accent-strong">
+											{pkg.name.replace(/[^a-zA-Z]/g, "").slice(0, 1).toUpperCase()}
+										</span>
+										<div className="min-w-0 flex-1">
+											<div className="flex items-center gap-2">
+												<span className="truncate text-sm font-medium text-neutral-100">{pkg.name}</span>
+												<span className="shrink-0 font-mono text-[9px] text-neutral-600">v{pkg.version}</span>
+												{kinds.map((k) => (
+													<span
+														key={k}
+														className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-[9px] text-neutral-400"
+													>
+														{k}
+													</span>
+												))}
+											</div>
+											<p className="mt-0.5 truncate text-xs text-neutral-500">{pkg.description}</p>
+										</div>
+										<span className="shrink-0 font-mono text-[9px] text-neutral-500">
+											{formatDownloads(pkg.downloads)}
+										</span>
+										<span className="shrink-0 font-mono text-[9px] text-neutral-700">
+											{timeAgo(pkg.date)}
+										</span>
+										{isInstalled ? (
+											<button
+												type="button"
+												disabled={installing === `npm:${pkg.name}`}
+												onClick={() => void remove(`npm:${pkg.name}`)}
+												className="shrink-0 rounded bg-neutral-800 px-3 py-1 text-xs text-neutral-400 hover:bg-danger-soft hover:text-danger disabled:opacity-40"
+											>
+												Remove
+											</button>
+										) : (
+											<button
+												type="button"
+												disabled={installing === pkg.name}
+												onClick={() => setPendingInstall(pkg.name)}
+												className="shrink-0 rounded bg-blue-600 px-3 py-1 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
+											>
+												Install…
+											</button>
+										)}
+									</div>
+								);
+							})}
+						</div>
+						{filtered.length > limit && (
+							<button
+								type="button"
+								onClick={() => setShown((n) => n + PAGE)}
+								className="mt-4 w-full rounded-lg border border-neutral-800 bg-neutral-900 py-2 text-xs text-neutral-400 hover:bg-neutral-800"
+							>
+								Show more ({(filtered.length - limit).toLocaleString()} remaining)
+							</button>
+						)}
+					</>
 				)}
 			</div>
 		</div>

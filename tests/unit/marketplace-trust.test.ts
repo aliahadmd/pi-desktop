@@ -3,7 +3,8 @@
  * remove IPC must carry the stored source verbatim — re-prefixing "npm:" sent
  * a bogus source upstream and the failure was swallowed. M-24: one-click
  * install from a browse surface was the wrong default for arbitrary-code
- * packages; installs go through the same trust interstitial as PackagesPanel.
+ * packages; catalog installs and the manual source install (moved here from
+ * the deleted Settings PackagesPanel) share one trust interstitial.
  *
  * Source pins (unit tests run in node, no jsdom).
  */

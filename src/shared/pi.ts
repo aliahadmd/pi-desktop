@@ -616,6 +616,10 @@ export interface NpmSearchResult {
 	version: string;
 	publisher: string;
 	date: string;
+	/** Monthly npm downloads — also the pi.dev/packages sort key. */
+	downloads: number;
+	/** npm keywords; the kind chips (extension/skill/prompt/theme) derive from these. */
+	keywords: string[];
 }
 
 export const packagesSearchRequestSchema = Type.Object({

@@ -8,15 +8,21 @@
  * Key storage: Electron safeStorage (Keychain-backed) → encrypted blob in
  * app_settings. Keys never reach the renderer unmasked and never appear in logs.
  */
-import { safeStorage } from "electron";
+import { app, safeStorage } from "electron";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { ModelRuntime, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
+import {
+	DefaultPackageManager,
+	ModelRuntime,
+	SettingsManager,
+	getAgentDir,
+} from "@earendil-works/pi-coding-agent";
 import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
 import type { ModelCatalogEntry, ProviderAuthInfo } from "../../shared/pi";
 import { toJson } from "../../shared/pi";
 import { describeError } from "./backend";
 import { appRoot } from "./app-root";
+import { setPackageCatalogCacheFile, searchPiPackageCatalog } from "./package-catalog";
 import type { IpcRouter } from "../ipc/router";
 import type { RendererEventBus } from "../ipc/events";
 
@@ -62,6 +68,9 @@ export class AuthService {
 		// Root at the app dir, not the launch directory (audit 6 H-4): in a
 		// packaged app process.cwd() is wherever the user launched from.
 		this.settingsManager = SettingsManager.create(appRoot(), getAgentDir());
+		// The package catalog crawl (~34 registry requests) is rate-limit
+		// sensitive — persist it across restarts so it runs at most twice a day.
+		setPackageCatalogCacheFile(path.join(app.getPath("userData"), "pi-package-catalog.json"));
 		await this.applyStoredKeys();
 	}
 
@@ -186,40 +195,12 @@ export class AuthService {
 			return null;
 		});
 		router.handle("packages.search", async (req) => {
-			try {
-				const { execFile } = await import("node:child_process");
-				const { promisify } = await import("node:util");
-				const exec = promisify(execFile);
-				// The optional query narrows the npm search (audit 6 L-3 — it used
-				// to be accepted and explicitly discarded). Arg array, no shell, so
-				// the terms cannot inject. The marketplace filters the full
-				// catalog client-side and sends no query.
-				const terms = ["pi-package"];
-				const query = req.query?.trim();
-				if (query !== undefined && query.length > 0) terms.push(query);
-				const raw = await exec("npm", ["search", ...terms, "--json"], {
-					timeout: 15_000,
-					maxBuffer: 1024 * 1024,
-				});
-				const results = JSON.parse(raw.stdout) as Array<{
-					name: string;
-					description?: string;
-					version: string;
-					publisher?: { username: string };
-					date: string;
-				}>;
-				return {
-					results: results.map((r) => ({
-						name: r.name,
-						description: r.description ?? "",
-						version: r.version,
-						publisher: typeof r.publisher === "object" ? r.publisher?.username ?? "unknown" : "unknown",
-						date: r.date,
-					})),
-				};
-			} catch (error) {
-				throw new Error(`npm search failed: ${error instanceof Error ? error.message : String(error)}`);
-			}
+			// Registry-backed catalog (src/main/pi/package-catalog.ts): the npm
+			// CLI caps search results, so the marketplace was seeing only a
+			// sliver of the ~8k pi-package catalog. The query narrows the
+			// registry search; without one the full cached catalog is returned.
+			const results = await searchPiPackageCatalog(req.query);
+			return { results };
 		});
 		router.handle("packages.list", () => {
 			const pm = this.makePackageManager();
@@ -468,10 +449,8 @@ export class AuthService {
 		}
 	}
 
-	private makePackageManager(): import("@earendil-works/pi-coding-agent").DefaultPackageManager {
+	private makePackageManager(): DefaultPackageManager {
 		if (this.settingsManager === null) throw new Error("settings not ready");
-		const { DefaultPackageManager } =
-			require("@earendil-works/pi-coding-agent") as typeof import("@earendil-works/pi-coding-agent");
 		return new DefaultPackageManager({
 			cwd: appRoot(), // not the launch directory (audit 6 H-4)
 			agentDir: getAgentDir(),

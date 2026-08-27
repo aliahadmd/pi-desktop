@@ -7,7 +7,9 @@
  *   Appearance— theme presets, UI scale, window transparency
  *   Safety    — default permission mode
  *   Sound     — sound effects toggle
- *   Packages  — package marketplace / installed skills
+ *
+ * Package management (browse/install/remove) lives on the Package
+ * Marketplace page — it moved out of Settings.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -23,13 +25,11 @@ import { THEME_PRESETS } from "../../../shared/theme";
 import { SCALES } from "../../../shared/display";
 import {
 	Laptop,
-	Package,
 	Settings2,
 	ShieldCheck,
 	Volume2,
 } from "lucide-react";
 import { ScopedModelsEditor } from "./ScopedModelsEditor";
-import { PackagesPanel } from "./PackagesPanel";
 
 interface PiSettings {
 	defaultProvider?: string;
@@ -46,7 +46,6 @@ const SECTIONS = [
 	{ id: "appearance", label: "Appearance", icon: Laptop },
 	{ id: "safety", label: "Safety", icon: ShieldCheck },
 	{ id: "sound", label: "Sound", icon: Volume2 },
-	{ id: "packages", label: "Packages", icon: Package },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -175,7 +174,6 @@ export function SettingsPage({
 					)}
 					{section === "safety" && <SafetySection />}
 					{section === "sound" && <SoundSection />}
-					{section === "packages" && <PackagesPanel />}
 				</div>
 			</div>
 		</div>
