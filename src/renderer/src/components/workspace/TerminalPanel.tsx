@@ -94,6 +94,9 @@ export function TerminalPanel({
 
 	// Re-fit when this panel becomes visible: while hidden it measures 0x0, so
 	// fitNow() correctly skipped it and xterm still holds stale dimensions.
+	// Also move keyboard focus into the terminal — opening the panel from the
+	// top bar or switching terminal tabs must not leave keystrokes landing on
+	// whichever button was clicked to get here.
 	useEffect(() => {
 		if (!active) return;
 		const term = termRef.current;
@@ -103,12 +106,17 @@ export function TerminalPanel({
 		if (el.clientWidth === 0 || el.clientHeight === 0) return;
 		fit.fit();
 		window.piDesktop.pty.resize(ptyIdRef.current, term.cols, term.rows);
+		term.focus();
 	}, [active]);
 
 	return (
+		// overflow-hidden: xterm's fitted width can exceed the container by a
+		// fractional-pixel rounding; letting that leak to the dock body's
+		// overflow-y-auto created a scrollbar appear/disappear feedback loop
+		// (layout oscillated ~1px forever, making the terminal unusable).
 		<div
 			ref={containerRef}
-			className={`h-full w-full p-1 ${active ? "" : "hidden"}`}
+			className={`h-full w-full overflow-hidden p-1 ${active ? "" : "hidden"}`}
 		/>
 	);
 }

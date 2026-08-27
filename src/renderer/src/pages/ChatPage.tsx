@@ -496,7 +496,7 @@ export default function ChatPage({
 													<Plus size={12} strokeWidth={2} />
 												</button>
 										</div>
-										<div className="min-h-0 flex-1">
+										<div className="min-h-0 flex-1 overflow-hidden">
 											{terminalTabs.map((tab, i) => (
 												<TerminalPanel
 													key={tab.id}

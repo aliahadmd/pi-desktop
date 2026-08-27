@@ -20,6 +20,8 @@ const MAX_TERMINALS = 8;
 /** Sanity bounds for renderer-supplied terminal dimensions (audit 6 L-2). */
 const MAX_COLS = 500;
 const MAX_ROWS = 200;
+/** Cap on keystrokes buffered while a shell spawn is in flight. */
+const MAX_PENDING_WRITE_BYTES = 8 * 1024;
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -68,6 +70,10 @@ export class PtyService {
 	 * then untracked and never killed.
 	 */
 	private readonly starting = new Map<string, PtyReservation>();
+	/** Keystrokes buffered per id while its shell spawn is in flight. */
+	private readonly pendingWrites = new Map<string, string[]>();
+	/** Shells we killed deliberately (dispose) — their onExit stays silent. */
+	private readonly intentionallyKilled = new Set<IPty>();
 	private readonly webContents: () => WebContents | null;
 	private readonly resolveScoped: (cwd: string) => string;
 	private readonly log: (level: "info" | "warn" | "error", message: string) => void;
@@ -96,7 +102,21 @@ export class PtyService {
 			const r = req as { id?: unknown; data?: unknown } | null;
 			if (r === null || typeof r !== "object") return;
 			if (typeof r.id !== "string" || typeof r.data !== "string") return;
-			this.terms.get(r.id)?.write(r.data);
+			const term = this.terms.get(r.id);
+			if (term !== undefined) {
+				term.write(r.data);
+				return;
+			}
+			// Spawn is async (dynamic import + helper repair), so keystrokes typed
+			// in the first ~100ms used to hit `terms.get(id) === undefined` and
+			// vanish silently. Buffer them while the id is in flight and flush
+			// into the shell as soon as it exists.
+			if (this.starting.has(r.id)) {
+				const pending = this.pendingWrites.get(r.id) ?? [];
+				pending.push(r.data);
+				if (pending.join("").length > MAX_PENDING_WRITE_BYTES) pending.shift();
+				this.pendingWrites.set(r.id, pending);
+			}
 		});
 		ipcMain.on("pty:resize", (_event, req: unknown) => {
 			const r = req as { id?: unknown; cols?: unknown; rows?: unknown } | null;
@@ -200,6 +220,7 @@ export class PtyService {
 			// awaiting the import or repairing the helper; without this the
 			// shell leaks untracked.
 			if (reservation.abandoned) {
+				this.pendingWrites.delete(id);
 				try {
 					term.kill();
 				} catch {
@@ -209,15 +230,34 @@ export class PtyService {
 			}
 
 			this.terms.set(id, term);
+			// Flush keystrokes typed while the spawn was in flight.
+			const buffered = this.pendingWrites.get(id);
+			if (buffered !== undefined) {
+				this.pendingWrites.delete(id);
+				for (const chunk of buffered) term.write(chunk);
+			}
 			term.onData((data) => this.send(id, data));
 			term.onExit(({ exitCode }) => {
+				// Guard the registry delete by identity: a kill+recreate under the
+				// same id (StrictMode remount, cwd change) can fire the OLD
+				// shell's exit after the NEW shell was registered. An unguarded
+				// delete evicts the live shell — output keeps flowing (onData
+				// closes over the term) but every write drops silently and the
+				// terminal looks alive while being untypeable.
+				const evicted = this.terms.get(id) === term;
+				if (evicted) this.terms.delete(id);
+				// Don't print an exit line for a shell WE killed deliberately —
+				// the channel id may already be feeding a fresh xterm.
+				if (this.intentionallyKilled.delete(term)) return;
 				this.send(id, `\r\n[exit ${String(exitCode)}]\r\n`);
-				this.terms.delete(id);
 			});
 		} catch (error) {
 			this.log("error", `pty create failed: ${String(error)}`);
 			// Surface the failure in the terminal surface instead of silence.
 			this.send(id, `\r\n[terminal failed to start: ${String(error).slice(0, 200)}]\r\n`);
+			// Drop keystrokes buffered under OUR reservation; a replacement
+			// create's buffer (same id) belongs to the new spawn.
+			if (this.starting.get(id) === reservation) this.pendingWrites.delete(id);
 		} finally {
 			// Release only OUR reservation. A replacement create owns the id now;
 			// deleting its marker would lose a kill that arrives while it is
@@ -227,6 +267,7 @@ export class PtyService {
 	}
 
 	dispose(id: string): void {
+		this.pendingWrites.delete(id);
 		const term = this.terms.get(id);
 		if (term === undefined) {
 			// Killed before the spawn finished: flag the reservation so create()
@@ -237,6 +278,7 @@ export class PtyService {
 		}
 		this.terms.delete(id);
 		try {
+			this.intentionallyKilled.add(term);
 			term.kill();
 		} catch {
 			// already dead
@@ -244,6 +286,7 @@ export class PtyService {
 	}
 
 	disposeAll(): void {
+		this.pendingWrites.clear();
 		for (const id of [...this.terms.keys()]) this.dispose(id);
 		// Flag in-flight spawns too: a shell that arrives after the window is
 		// gone (or during quit) must be reaped, not orphaned.
