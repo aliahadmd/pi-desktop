@@ -1,39 +1,53 @@
 /**
- * Per-row transcript UI state (expanded / dismissed), kept outside the session
- * store because rows are virtualized: they unmount when scrolled out of view,
- * so local component state would be lost. Keyed `${sessionId}:${blockId}`.
+ * Per-row transcript UI state (expanded / dismissed / copied), kept outside
+ * the session store because rows are virtualized: they unmount when scrolled
+ * out of view, so local component state would be lost. Keyed
+ * `${sessionId}:${blockId}`.
  *
- * The sets store *deviations from the default*, so a running tool that has
- * never been clicked still reads as expanded, and one the user collapsed stays
- * collapsed after remounting.
+ * Expansion is stored as an EXPLICIT boolean per key (audit 6 M-17). The
+ * previous scheme stored "deviation from the default", but the default is
+ * dynamic (a running tool defaults to expanded, a finished one to collapsed),
+ * so a user-collapsed running tool re-expanded itself the moment it finished.
+ * Absence from the map still means "follow the row's current default".
  */
 import { create } from "zustand";
 
 interface TranscriptUiState {
-	expanded: Set<string>;
+	expanded: Map<string, boolean>;
 	dismissed: Set<string>;
+	/** Rows whose copy button fired recently (drives the "copied" tick). */
+	copied: Set<string>;
 	isExpanded(key: string, fallback: boolean): boolean;
 	toggleExpanded(key: string, fallback: boolean): void;
+	/** Pin a row open/closed (the assistant tool-chip expand affordance). */
+	setExpanded(key: string, value: boolean): void;
 	isDismissed(key: string): boolean;
 	dismiss(key: string): void;
+	isCopied(key: string): boolean;
+	markCopied(key: string): void;
+	unmarkCopied(key: string): void;
 	/** Drop all rows for a session when its tab closes. */
 	clearSession(sessionId: string): void;
 }
 
 export const useTranscriptUi = create<TranscriptUiState>((set, get) => ({
-	expanded: new Set<string>(),
+	expanded: new Map<string, boolean>(),
 	dismissed: new Set<string>(),
+	copied: new Set<string>(),
 
 	isExpanded(key, fallback) {
-		// present in the set === "user flipped it away from the default"
-		return get().expanded.has(key) ? !fallback : fallback;
+		return get().expanded.get(key) ?? fallback;
 	},
 
-	toggleExpanded(key, _fallback) {
+	toggleExpanded(key, fallback) {
+		const current = get().isExpanded(key, fallback);
+		get().setExpanded(key, !current);
+	},
+
+	setExpanded(key, value) {
 		set((prev) => {
-			const next = new Set(prev.expanded);
-			if (next.has(key)) next.delete(key);
-			else next.add(key);
+			const next = new Map(prev.expanded);
+			next.set(key, value);
 			return { expanded: next };
 		});
 	},
@@ -50,11 +64,35 @@ export const useTranscriptUi = create<TranscriptUiState>((set, get) => ({
 		});
 	},
 
+	isCopied(key) {
+		return get().copied.has(key);
+	},
+
+	markCopied(key) {
+		set((prev) => {
+			const next = new Set(prev.copied);
+			next.add(key);
+			return { copied: next };
+		});
+	},
+
+	unmarkCopied(key) {
+		set((prev) => {
+			if (!prev.copied.has(key)) return prev;
+			const next = new Set(prev.copied);
+			next.delete(key);
+			return { copied: next };
+		});
+	},
+
 	clearSession(sessionId) {
 		const prefix = `${sessionId}:`;
 		set((prev) => ({
-			expanded: new Set([...prev.expanded].filter((k) => !k.startsWith(prefix))),
+			expanded: new Map(
+				[...prev.expanded].filter(([k]) => !k.startsWith(prefix))
+			),
 			dismissed: new Set([...prev.dismissed].filter((k) => !k.startsWith(prefix))),
+			copied: new Set([...prev.copied].filter((k) => !k.startsWith(prefix))),
 		}));
 	},
 }));

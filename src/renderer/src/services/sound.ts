@@ -10,7 +10,10 @@ function getCtx(): AudioContext | null {
 		if (audioContext === null) {
 			audioContext = new AudioContext();
 		}
-		if (audioContext.state === "suspended") void audioContext.resume();
+		if (audioContext.state === "suspended") {
+			// resume() can reject (e.g. no audio device); never an unhandled rejection.
+			void audioContext.resume().catch(() => {});
+		}
 		return audioContext;
 	} catch {
 		return null;
@@ -65,5 +68,6 @@ export function playSoundIfEnabled(event: SoundEvent): void {
 		.invoke({ type: "app.settings.get", key: "soundEnabled" })
 		.then((r) => {
 			if (r.ok && r.data !== false) playSound(event);
-		});
+		})
+		.catch(() => {});
 }

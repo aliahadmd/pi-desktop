@@ -21,6 +21,19 @@ function send(obj) {
 	process.stdout.write(JSON.stringify(obj) + "\n");
 }
 
+/**
+ * Write one JSON line split in two chunks, the boundary landing in the middle
+ * of a multi-byte UTF-8 sequence (audit 6 M-6 regression fixture).
+ */
+function sendSplit(obj) {
+	const buf = Buffer.from(JSON.stringify(obj) + "\n", "utf8");
+	const marker = Buffer.from("🚀", "utf8");
+	const idx = buf.indexOf(marker);
+	const split = idx === -1 ? Math.floor(buf.length / 2) : idx + 2;
+	process.stdout.write(buf.subarray(0, split));
+	setTimeout(() => process.stdout.write(buf.subarray(split)), 10);
+}
+
 function reply(cmd, obj) {
 	send({ ...obj, ...(cmd.id !== undefined ? { id: cmd.id } : {}) });
 }
@@ -105,6 +118,78 @@ function handle(cmd) {
 				message: "Proceed with the thing?",
 			});
 			reply(cmd, { type: "response", command: "dialog", success: true });
+			break;
+		case "dialog-bad-timeout":
+			// Garbage timeout field — the client must not ship NaN to the renderer.
+			send({
+				type: "extension_ui_request",
+				id: "ui-bad",
+				method: "select",
+				title: "Pick one",
+				options: ["a", "b"],
+				timeout: "not-a-number",
+			});
+			reply(cmd, { type: "response", command: "dialog-bad-timeout", success: true });
+			break;
+		case "utf8": {
+			// Multi-byte text split mid-codepoint across stdout chunks (M-6).
+			// The second split line is delayed so the two don't interleave.
+			const text = "héllo — 世界 🚀";
+			sendSplit({
+				type: "message_update",
+				usage: { input: 1, output: 1, totalTokens: 2 },
+				assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: text },
+			});
+			setTimeout(() => {
+				sendSplit({ type: "response", command: "utf8", success: true, id: cmd.id, data: { text } });
+			}, 30);
+			break;
+		}
+		case "get_available_models":
+			reply(cmd, {
+				type: "response",
+				command: "get_available_models",
+				success: true,
+				data: {
+					models: [
+						{
+							provider: "fake",
+							id: "fake-pro",
+							name: "Fake Pro",
+							contextWindow: 200000,
+							maxTokens: 8192,
+							reasoning: true,
+							input: ["text", "image"],
+						},
+						// Sparse entry: only the fields the old code knew about.
+						{ provider: "fake", id: "fake-mini", contextWindow: 64000, reasoning: false },
+					],
+				},
+			});
+			break;
+		case "get_entries":
+			if (cmd.since === "unknown-cursor") {
+				reply(cmd, {
+					type: "response",
+					command: "get_entries",
+					success: false,
+					error: `Entry not found: ${cmd.since}`,
+				});
+			} else {
+				reply(cmd, {
+					type: "response",
+					command: "get_entries",
+					success: true,
+					data: { entries: [{ id: "e1" }, { id: "e2" }], leafId: "e2" },
+				});
+			}
+			break;
+		case "hang":
+			// Never replies (timeout tests); in scene "exit-on-hang" the process
+			// dies shortly after instead (M-7 pending-rejection tests).
+			if (process.env.FAKE_PI_SCENE === "exit-on-hang") {
+				setTimeout(() => process.exit(1), 50);
+			}
 			break;
 		default:
 			// Unknown command → success with no data (keeps the protocol moving).

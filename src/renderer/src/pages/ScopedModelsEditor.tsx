@@ -2,6 +2,7 @@
  * Scoped-models editor: the cycle list behind the StatusBar model chip.
  */
 import { useCallback, useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { piThinkingLevels } from "../../../shared/pi";
 
 interface ScopedModel {
@@ -13,6 +14,7 @@ interface ScopedModel {
 export function ScopedModelsEditor(): React.JSX.Element {
 	const [models, setModels] = useState<ScopedModel[]>([]);
 	const [saved, setSaved] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	const load = useCallback(async (): Promise<void> => {
 		const result = await window.piDesktop.invoke({
@@ -27,10 +29,18 @@ export function ScopedModelsEditor(): React.JSX.Element {
 
 	async function persist(next: ScopedModel[]): Promise<void> {
 		setModels(next);
-		await window.piDesktop.invoke({
+		// The envelope must be checked — the store write can fail, and an
+		// unchecked result used to print "Saved." over a silent no-op.
+		const result = await window.piDesktop.invoke({
 			type: "session.scoped_models.set",
 			models: next,
 		});
+		if (!result.ok) {
+			setSaved(false);
+			setError(result.error.message);
+			return;
+		}
+		setError(null);
 		setSaved(true);
 		setTimeout(() => setSaved(false), 1500);
 	}
@@ -59,6 +69,7 @@ export function ScopedModelsEditor(): React.JSX.Element {
 				</button>
 			</div>
 			{saved && <div className="mb-2 text-[10px] text-green-400">Saved.</div>}
+			{error !== null && <div className="mb-2 text-[10px] text-danger">{error}</div>}
 			{models.length === 0 ? (
 				<p className="text-xs text-neutral-600">No scoped models yet.</p>
 			) : (
@@ -103,9 +114,10 @@ export function ScopedModelsEditor(): React.JSX.Element {
 							<button
 								type="button"
 								onClick={() => void persist(models.filter((_, j) => j !== i))}
-								className="rounded px-1.5 py-1 text-[10px] text-neutral-500 hover:bg-danger-soft hover:text-danger"
+								aria-label={`Remove ${m.provider}/${m.modelId}`}
+								className="flex items-center rounded px-1.5 py-1 text-[10px] text-neutral-500 hover:bg-danger-soft hover:text-danger"
 							>
-								×
+								<X size={11} strokeWidth={2} />
 							</button>
 						</div>
 					))}

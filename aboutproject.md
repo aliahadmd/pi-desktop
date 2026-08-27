@@ -46,9 +46,9 @@ The architecture has three layers:
 
 ```bash
 npm run typecheck          # strict TS across all configs
-npm test                   # 198 unit tests, 30 files (vitest)
+npm test                   # 380 unit tests, 70 files (vitest)
 npm run e2e                # 34 e2e tests (Playwright _electron)
-cd sidecar && uv run pytest -q   # 14 pytest
+cd sidecar && uv run pytest -q   # 26 pytest
 cd sidecar && uv run mypy app/   # strict type check
 ./scripts/check-secrets.sh       # credential scan
 npm audit --omit=dev             # dependency audit
@@ -145,13 +145,13 @@ permission extension resolved every `tool_call` against the most recently
 opened session, so with two tabs open plan mode could be silently escaped.
 Remediated in `6dcb187` along with H-2, M-1, M-2 and M-7.
 
-## Current state (2026-08-25, master `6dcb187`)
+## Current state (2026-08-27, master `307fbe5`)
 
 | | |
 |---|---|
 | Phases complete | 1–7 (chapters 1–33) |
-| IPC channels | 81, all typebox-validated |
-| Gates | typecheck clean · 198 unit (30 files) · 34 e2e · 14 sidecar pytest |
+| IPC channels | 85, all typebox-validated |
+| Gates | typecheck clean · 380 unit (70 files) · 34 e2e · 26 sidecar pytest |
 | Source | ~16.2k lines TS/TSX |
 | Pi version | pinned exactly at `0.84.2` |
 
@@ -205,7 +205,7 @@ icon by matching `PERMISSION_BLOCK_REASONS` from `src/shared/pi.ts`.
 ## For a new coding agent picking this up
 
 1. Read `docs/security.md` first (threat model, boundaries).
-2. Read `src/shared/pi.ts` — all 81 IPC channels are defined there with their
+2. Read `src/shared/pi.ts` — all 85 IPC channels are defined there with their
    schemas. This is your map of what the app can do.
 3. Read `AGENTS.md` for the working rulebook (gates, conventions, process).
 4. Read `docs/chapter*-status.md` for phase-1 implementation details, and

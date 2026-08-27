@@ -17,6 +17,14 @@ log = logging.getLogger("sidecar.indexer")
 
 MAX_TEXT_CHARS = 10_000
 
+# Control characters used to delimit FTS match spans. They are stripped from
+# session text at index time, so they can never collide with content the way
+# `<mark>` does -- which is the whole point: `snippet()` does not escape the
+# text it wraps, so emitting HTML here put raw session content straight into
+# the DOM.
+_MATCH_OPEN = "\x1e"
+_MATCH_CLOSE = "\x1f"
+
 
 def _text_from_content(content: Any) -> str:
     """Extract searchable text from pi content blocks (string or array)."""
@@ -73,6 +81,10 @@ def parse_session_file(path: Path) -> list[dict[str, str]]:
                 text = _text_from_content(message.get("content"))
                 if not text.strip():
                     continue
+                # Drop the snippet delimiters from indexed text: session content
+                # containing them would be mis-parsed as match spans on the way
+                # out (mis-highlight only, but the markers are reserved).
+                text = text.replace(_MATCH_OPEN, "").replace(_MATCH_CLOSE, "")
                 rows.append(
                     {
                         "file_path": str(path),
@@ -111,50 +123,66 @@ def remove_file(conn: sqlite3.Connection, file_key: str) -> None:
     conn.execute("DELETE FROM index_state WHERE file_path = ?", (file_key,))
 
 
-def run_incremental(conn: sqlite3.Connection, sessions_root: Path) -> dict[str, int]:
-    """Walk sessions_root; index new/changed files; drop deleted ones."""
+def run_incremental(
+    conn: sqlite3.Connection,
+    sessions_root: Path,
+    batch_size: int = 32,
+) -> dict[str, int]:
+    """Walk sessions_root; index new/changed files; drop deleted ones.
+
+    Writes commit per batch of ``batch_size`` files rather than once per run:
+    the Electron main process writes to the same SQLite file, and holding the
+    WAL write lock for a whole run stalls it until its busy_timeout fires. A
+    failure mid-run rolls back only the in-flight batch (never a half-written
+    file's rows) and releases the lock; already-committed batches stay.
+    """
     result = {"indexed_files": 0, "rows": 0, "removed": 0}
     if not sessions_root.exists():
         return result
 
     current: set[str] = set()
-    for path in sorted(sessions_root.rglob("*.jsonl")):
-        file_key = str(path)
-        current.add(file_key)
-        try:
-            stat = path.stat()
-        except OSError:
-            continue
-        row = conn.execute(
-            "SELECT mtime, size FROM index_state WHERE file_path = ?", (file_key,)
-        ).fetchone()
-        if row is not None and abs(row["mtime"] - stat.st_mtime) < 1e-6 and row["size"] == stat.st_size:
-            continue  # unchanged
-        result["rows"] += index_file(conn, path)
-        result["indexed_files"] += 1
+    pending = 0
+    try:
+        for path in sorted(sessions_root.rglob("*.jsonl")):
+            file_key = str(path)
+            current.add(file_key)
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            row = conn.execute(
+                "SELECT mtime, size FROM index_state WHERE file_path = ?", (file_key,)
+            ).fetchone()
+            if row is not None and abs(row["mtime"] - stat.st_mtime) < 1e-6 and row["size"] == stat.st_size:
+                continue  # unchanged
+            result["rows"] += index_file(conn, path)
+            result["indexed_files"] += 1
+            pending += 1
+            if pending >= batch_size:
+                conn.commit()
+                pending = 0
 
-    for row in conn.execute("SELECT file_path FROM index_state").fetchall():
-        if row["file_path"] not in current:
-            remove_file(conn, row["file_path"])
-            result["removed"] += 1
-
-    conn.commit()
+        for row in conn.execute("SELECT file_path FROM index_state").fetchall():
+            if row["file_path"] not in current:
+                remove_file(conn, row["file_path"])
+                result["removed"] += 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     return result
 
 
 def sanitize_query(query: str) -> str:
     """Quote each whitespace-separated term so FTS5 special chars
-    (hyphens, quotes, parens) are treated as literal text."""
-    terms = [t for t in query.split() if t]
-    return " ".join(f'"{t.replace(chr(34), "")}"' for t in terms)
+    (hyphens, quotes, parens) are treated as literal text.
 
-
-# Control characters used to delimit FTS match spans. These are never present
-# in indexed session text, so they cannot collide with content the way `<mark>`
-# does -- which is the whole point: `snippet()` does not escape the text it
-# wraps, so emitting HTML here put raw session content straight into the DOM.
-_MATCH_OPEN = "\x1e"
-_MATCH_CLOSE = "\x1f"
+    Terms that are empty once their quotes are stripped (e.g. ``""``) are
+    dropped: an empty quoted phrase is an FTS5 syntax error that would
+    otherwise fail the whole search.
+    """
+    terms = [t.replace(chr(34), "") for t in query.split()]
+    return " ".join(f'"{t}"' for t in terms if t)
 
 
 def split_snippet(raw: str) -> list[dict[str, object]]:

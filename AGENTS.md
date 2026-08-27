@@ -7,12 +7,12 @@ this file is the working rulebook. Read both before changing anything.
 ## Read in this order
 
 1. `docs/security.md` — threat model and trust boundaries. Never weaken them.
-2. `src/shared/pi.ts` — every IPC channel with its typebox schema (81 today).
+2. `src/shared/pi.ts` — every IPC channel with its typebox schema (85 today).
    This is the map of what the app can do.
 3. `aboutproject.md` — why the architecture is what it is.
-4. `pibugs/` — audit findings and their remediation state; five audits, with
-   the reasoning for rejections recorded. Audit 5's open items are listed in
-   its "Post-audit status summary".
+4. `pibugs/` — audit findings and their remediation state; six audits, with
+   the reasoning for rejections recorded. Audit 6's open items are listed in
+   its "Post-audit status summary" (audit 5's remain open where noted).
 5. Upstream docs when touching pi integration: `../pi/packages/coding-agent/docs/`
    (`sdk.md`, `rpc.md`, `session-format.md`, `extensions.md`).
 
@@ -20,10 +20,10 @@ this file is the working rulebook. Read both before changing anything.
 
 ```bash
 npm run typecheck   # strict TS, exactOptionalPropertyTypes
-npm test            # vitest unit suite (30 files, 198 passing as of 2026-08-25)
+npm test            # vitest unit suite (70 files, 380 passing as of 2026-08-27)
 npm run e2e         # Playwright _electron, 34 tests; builds and stages itself
 npm audit --omit=dev && ./scripts/check-secrets.sh
-cd sidecar && uv run pytest -q && uv run mypy app/   # 14 passing
+cd sidecar && uv run pytest -q && uv run mypy app/   # 26 passing
 ```
 
 Environment notes: cleanup tools (CleanMyMac-class) have been observed deleting

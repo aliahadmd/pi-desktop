@@ -2,17 +2,20 @@
  * RpcPiBackend — drives one pi session through a `pi --mode rpc` subprocess.
  *
  * Protocol: JSONL over stdin/stdout (see pi docs/rpc.md). Framing is strict:
- * LF-delimited only (JsonlLineReader), request correlation by id, 30 s default
- * command timeout, extension UI dialogs answered via `extension_ui_response`.
+ * LF-delimited only (JsonlLineReader), request correlation by id, per-command
+ * timeouts (30 s default; bash/compact unbounded), extension UI dialogs
+ * answered via `extension_ui_response`.
  *
  * Binary resolution order:
  *  1. PI_DESKTOP_PI_PATH env — an executable command run directly (tests point
  *     this at a fake responder script).
- *  2. Bundled CLI: Electron run-as-node + @earendil-works/pi-coding-agent cli.js
+ *  2. Bundled CLI: Electron run-as-node + @earendil-works/pi-coding-agent cli.js,
+ *     resolved against the packaged-aware app root (audit 6 H-4).
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import type {
 	PiCommandInfo,
 	PiEvent,
@@ -24,14 +27,28 @@ import type {
 } from "../../shared/pi";
 import type { JsonValue } from "../../shared/pi";
 import { safeJson, describeError, type BackendOptions, type IPiBackend, type PromptInput, type SetModelResultInfo } from "./backend";
+import { appRoot } from "./app-root";
 import { JsonlLineReader } from "./jsonl-reader";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * Per-command response timeouts (audit 6 M-7): a single 30 s cap falsely
+ * failed long `bash`/`compact` runs — the client rejected while the
+ * subprocess kept working, and the late response was dropped as an unknown
+ * id. 0 means no client-side timeout; the spawn-error/exit rejection paths
+ * still fail fast when the CLI dies, and `abort_bash` covers runaway shells.
+ * Exported for tests.
+ */
+export const COMMAND_TIMEOUTS_MS: Record<string, number> = {
+	bash: 0,
+	compact: 0,
+};
+
 interface PendingRequest {
 	resolve(value: unknown): void;
 	reject(error: Error): void;
-	timer: NodeJS.Timeout;
+	timer: NodeJS.Timeout | undefined;
 }
 
 interface PendingDialog {
@@ -43,6 +60,12 @@ export interface RpcBackendLaunchOptions {
 	command?: string;
 	/** Args appended after the base RPC flags (only for default resolution). */
 	extraArgs?: string[];
+	/**
+	 * Base directory for bundled-CLI resolution (defaults to the
+	 * packaged-aware appRoot()). Injectable so tests resolve against a temp
+	 * root instead of the real app layout.
+	 */
+	appRoot?: string;
 }
 
 export class RpcPiBackend implements IPiBackend {
@@ -52,12 +75,19 @@ export class RpcPiBackend implements IPiBackend {
 	private readonly launch: RpcBackendLaunchOptions;
 	private proc: ChildProcess | null = null;
 	private reader = new JsonlLineReader();
+	// Multi-byte UTF-8 can straddle pipe-buffer boundaries (audit 6 M-6):
+	// per-chunk toString() corrupts the codepoint into U+FFFD and the line then
+	// fails JSON.parse. StringDecoder holds the partial sequence until the rest
+	// arrives — the same approach as upstream's own rpc.md client example.
+	private stdoutDecoder = new StringDecoder("utf8");
+	private stderrDecoder = new StringDecoder("utf8");
 	private readonly pending = new Map<string, PendingRequest>();
 	private readonly pendingDialogs = new Map<string, PendingDialog>();
 	private requestId = 0;
 	private stderrTail: string[] = [];
 	private started = false;
 	private disposed = false;
+	private spawnFailed = false;
 
 	private constructor(options: BackendOptions, launch: RpcBackendLaunchOptions) {
 		this.options = options;
@@ -80,13 +110,16 @@ export class RpcPiBackend implements IPiBackend {
 		this.started = true;
 
 		child.stdout?.on("data", (chunk: Buffer) => {
-			this.consumeStdout(chunk.toString("utf8"));
+			this.consumeStdout(this.stdoutDecoder.write(chunk));
 		});
 		child.stderr?.on("data", (chunk: Buffer) => {
-			this.stderrTail.push(chunk.toString("utf8"));
+			this.stderrTail.push(this.stderrDecoder.write(chunk));
 			if (this.stderrTail.length > 50) this.stderrTail.shift();
 		});
 		child.on("error", (error) => {
+			// A failed spawn must not leave pending requests hanging (audit 6 M-7).
+			this.spawnFailed = true;
+			this.rejectAllPending(`spawn failed: ${describeError(error)}`);
 			this.options.onDied(`spawn failed: ${describeError(error)}`);
 		});
 		child.on("exit", (code, signal) => {
@@ -103,7 +136,9 @@ export class RpcPiBackend implements IPiBackend {
 		const child = this.proc;
 		this.proc = null;
 		this.rejectAllPending("backend disposed");
-		if (child === null || child.exitCode !== null) return;
+		// A spawn-failed child never emits "exit" — waiting on it would hang
+		// session close forever (same dead-CLI class as audit 6 M-7).
+		if (child === null || child.exitCode !== null || this.spawnFailed) return;
 		await new Promise<void>((resolve) => {
 			const timer = setTimeout(() => {
 				child.kill("SIGKILL");
@@ -185,17 +220,27 @@ export class RpcPiBackend implements IPiBackend {
 	}
 
 	async getAvailableModels(): Promise<PiModelInfo[]> {
+		// The wire carries full serialized Model objects (audit 6 L-4) — pass the
+		// real fields through instead of fabricating maxTokens/modalities.
 		const data = (await this.request({ type: "get_available_models" })) as {
-			models: Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>;
+			models: Array<{
+				provider: string;
+				id: string;
+				name?: string;
+				contextWindow?: number;
+				maxTokens?: number;
+				reasoning?: boolean;
+				input?: string[];
+			}>;
 		};
 		return data.models.map((m) => ({
 			provider: m.provider,
 			id: m.id,
-			name: m.id,
-			contextWindow: m.contextWindow,
-			maxTokens: 0,
-			reasoning: m.reasoning,
-			input: [],
+			name: typeof m.name === "string" && m.name.length > 0 ? m.name : m.id,
+			contextWindow: m.contextWindow ?? 0,
+			maxTokens: m.maxTokens ?? 0,
+			reasoning: m.reasoning === true,
+			input: Array.isArray(m.input) ? m.input : [],
 			thinkingLevels: [],
 		}));
 	}
@@ -310,10 +355,21 @@ export class RpcPiBackend implements IPiBackend {
 	async getEntries(since?: string): Promise<{ entries: JsonValue[]; leafId: string | null }> {
 		const command: Record<string, unknown> = { type: "get_entries" };
 		if (since !== undefined) command.since = since;
-		const data = (await this.request(command)) as {
-			entries: unknown[];
-			leafId: string | null;
-		};
+		let data: { entries: unknown[]; leafId: string | null };
+		try {
+			data = (await this.request(command)) as { entries: unknown[]; leafId: string | null };
+		} catch (error) {
+			// Unknown cursor: the SDK backend silently resyncs from the start
+			// (findIndex miss → full slice). Match that here instead of surfacing
+			// an RPC-only error to shared callers (audit 6 L-4).
+			if (since === undefined || !describeError(error).startsWith("Entry not found")) {
+				throw error;
+			}
+			data = (await this.request({ type: "get_entries" })) as {
+				entries: unknown[];
+				leafId: string | null;
+			};
+		}
 		return { entries: data.entries.map((e) => safeJson(e)), leafId: data.leafId };
 	}
 
@@ -367,7 +423,10 @@ export class RpcPiBackend implements IPiBackend {
 		};
 		if (response.cancelled === true) {
 			payload.cancelled = true;
-		} else if (dialog?.method === "confirm") {
+		} else if (dialog !== undefined ? dialog.method === "confirm" : response.confirmed !== undefined) {
+			// Stale id (double answer / post-restart): no recorded method, so honor
+			// the shape the renderer actually sent instead of a blanket empty
+			// string that would mis-answer a confirm dialog (audit 6 L-4).
 			payload.confirmed = response.confirmed === true;
 		} else {
 			payload.value = response.value ?? "";
@@ -402,14 +461,29 @@ export class RpcPiBackend implements IPiBackend {
 		if (override !== undefined && override.length > 0) {
 			return { command: override, args: baseArgs, env: { ...process.env } };
 		}
-		const appRoot = process.cwd();
-		const cliJs = path.join(
-			appRoot,
-			"node_modules/@earendil-works/pi-coding-agent/dist/cli.js"
-		);
-		if (!existsSync(cliJs)) {
+		// Audit 6 H-4: resolve against the packaged-aware app root first, never
+		// blindly process.cwd() — in a packaged app the cwd is the launch
+		// directory ("/" from Finder), so the CLI was never found in production.
+		// The packaged layout keeps pi-coding-agent inside app.asar's
+		// node_modules, and Electron's node executes asar-contained scripts fine
+		// under ELECTRON_RUN_AS_NODE (verified against the shipped build).
+		// Fall back to process.cwd() for harnesses that run the built app from a
+		// stripped copy (the e2e suite copies out/ without node_modules).
+		const candidates = [this.launch.appRoot ?? appRoot(), process.cwd()];
+		let cliJs: string | null = null;
+		for (const root of candidates) {
+			const candidate = path.join(
+				root,
+				"node_modules/@earendil-works/pi-coding-agent/dist/cli.js"
+			);
+			if (existsSync(candidate)) {
+				cliJs = candidate;
+				break;
+			}
+		}
+		if (cliJs === null) {
 			throw new Error(
-				`pi CLI not found at ${cliJs}; set PI_DESKTOP_PI_PATH to a pi executable`
+				`pi CLI not found (looked in ${candidates.join(", ")}); set PI_DESKTOP_PI_PATH to a pi executable`
 			);
 		}
 		// Run the bundled CLI with Electron's embedded Node.
@@ -519,19 +593,33 @@ export class RpcPiBackend implements IPiBackend {
 		}
 	}
 
-	private request(command: Record<string, unknown>, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<unknown> {
+	private request(command: Record<string, unknown>, timeoutMs?: number): Promise<unknown> {
 		const child = this.proc;
 		if (child === null || child.stdin === null || !child.stdin.writable) {
 			return Promise.reject(new Error("RPC process is not running"));
 		}
+		const effectiveTimeout =
+			timeoutMs ?? COMMAND_TIMEOUTS_MS[String(command.type)] ?? DEFAULT_REQUEST_TIMEOUT_MS;
 		const id = `req_${++this.requestId}`;
 		return new Promise((resolve, reject) => {
-			const timer = setTimeout(() => {
-				this.pending.delete(id);
-				reject(new Error(`timeout waiting for response to ${String(command.type)}`));
-			}, timeoutMs);
+			const timer =
+				effectiveTimeout > 0
+					? setTimeout(() => {
+							this.pending.delete(id);
+							reject(new Error(`timeout waiting for response to ${String(command.type)}`));
+						}, effectiveTimeout)
+					: undefined;
 			this.pending.set(id, { resolve, reject, timer });
-			this.writeLine(JSON.stringify({ ...command, id }));
+			try {
+				this.writeLine(JSON.stringify({ ...command, id }));
+			} catch (error) {
+				// A synchronous write failure must not leak the pending entry
+				// (audit 6 L-4) — it would hang until the timeout, or forever for
+				// an untimed command.
+				this.pending.delete(id);
+				if (timer !== undefined) clearTimeout(timer);
+				reject(error instanceof Error ? error : new Error(String(error)));
+			}
 		});
 	}
 
@@ -697,6 +785,17 @@ function mapRpcEventInner(msg: Record<string, unknown>): Record<string, unknown>
 			};
 		case "thinking_level_changed":
 			return { type: "thinking_level_changed", level: msg["level"] as PiThinkingLevel };
+		case "extension_error":
+			// Audit 6 M-8: extension failures were silently dropped; forward them
+			// as backend_warning so the renderer's notice surface can show them.
+			return {
+				type: "backend_warning",
+				reason: `extension error${
+					typeof msg["extensionPath"] === "string" ? ` in ${msg["extensionPath"]}` : ""
+				}${typeof msg["event"] === "string" ? ` during ${msg["event"]}` : ""}: ${String(
+					msg["error"] ?? "unknown"
+				)}`,
+			};
 		default:
 			return null;
 	}
@@ -705,7 +804,11 @@ function mapRpcEventInner(msg: Record<string, unknown>): Record<string, unknown>
 function mapUiDialog(msg: Record<string, unknown>, id: string): UiDialogRequest {
 	const method = msg["method"];
 	const timeoutRaw = msg["timeout"];
-	const timeoutMs = timeoutRaw === undefined ? undefined : Number(timeoutRaw);
+	// Guard against NaN/garbage timeouts (audit 6 L-4): a non-finite value
+	// would poison the renderer's countdown math.
+	const parsed = timeoutRaw === undefined ? undefined : Number(timeoutRaw);
+	const timeoutMs =
+		parsed !== undefined && Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 	switch (method) {
 		case "select": {
 			const base = {

@@ -17,18 +17,57 @@ export interface PtyCreateRequest {
 }
 
 const MAX_TERMINALS = 8;
+/** Sanity bounds for renderer-supplied terminal dimensions (audit 6 L-2). */
+const MAX_COLS = 500;
+const MAX_ROWS = 200;
+
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * In-flight spawn reservation. One record per create() call: flagging the
+ * RECORD (not the id) is what keeps a kill from leaking across the StrictMode
+ * replace window — a replacement create owns a fresh record, and the old
+ * create's cleanup must never touch it (audit 6 L-8).
+ */
+interface PtyReservation {
+	abandoned: boolean;
+}
+
+/** Clamp a renderer-supplied grid dimension into a sane range. */
+function clampDimension(value: unknown, fallback: number, max: number): number {
+	const n = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : fallback;
+	return Math.min(Math.max(n, 1), max);
+}
+
+/**
+ * Shape guard + normalization for pty:create (audit 6 L-2). The pty channels
+ * bypass the typebox-validated request router, so payloads are untrusted:
+ * `ipcRenderer.send("pty:create", null)` used to throw uncaught in main, and
+ * cols/rows went straight into node-pty unchecked.
+ */
+function parseCreateRequest(req: unknown): PtyCreateRequest | null {
+	if (typeof req !== "object" || req === null) return null;
+	const r = req as { id?: unknown; cwd?: unknown; cols?: unknown; rows?: unknown };
+	if (typeof r.id !== "string" || !ID_PATTERN.test(r.id)) return null;
+	if (typeof r.cwd !== "string" || r.cwd.length === 0) return null;
+	return {
+		id: r.id,
+		cwd: r.cwd,
+		cols: clampDimension(r.cols, 80, MAX_COLS),
+		rows: clampDimension(r.rows, 24, MAX_ROWS),
+	};
+}
 
 export class PtyService {
 	private readonly terms = new Map<string, IPty>();
 	/**
-	 * Ids whose spawn is in flight. `create` is async, so without a synchronous
-	 * reservation two rapid calls for the same id (React StrictMode mounts every
-	 * effect twice in dev) both pass the `terms.has` check and spawn a real
-	 * shell each — one of which is then untracked and never killed.
+	 * Ids whose spawn is in flight, keyed to a per-create reservation record.
+	 * `create` is async, so without a synchronous reservation two rapid calls
+	 * for the same id (React StrictMode mounts every effect twice in dev) both
+	 * pass the `terms.has` check and spawn a real shell each — one of which is
+	 * then untracked and never killed.
 	 */
-	private readonly starting = new Set<string>();
-	/** Ids killed while their spawn was still in flight; reaped on arrival. */
-	private readonly abandoned = new Set<string>();
+	private readonly starting = new Map<string, PtyReservation>();
 	private readonly webContents: () => WebContents | null;
 	private readonly resolveScoped: (cwd: string) => string;
 	private readonly log: (level: "info" | "warn" | "error", message: string) => void;
@@ -44,61 +83,73 @@ export class PtyService {
 	}
 
 	register(): void {
-		ipcMain.on("pty:create", (event, req: PtyCreateRequest) => {
-			const id = String(req.id);
-			if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
-				this.log("warn", `pty:create rejected invalid id pattern`);
+		ipcMain.on("pty:create", (event, req: unknown) => {
+			const parsed = parseCreateRequest(req);
+			if (parsed === null) {
+				this.log("warn", "pty:create rejected malformed payload");
 				return;
 			}
-			void this.create(id, String(req.cwd), Number(req.cols) || 80, Number(req.rows) || 24);
+			void this.create(parsed.id, parsed.cwd, parsed.cols, parsed.rows);
 			void event; // ack arrives via data events
 		});
-		ipcMain.on("pty:write", (_event, req: { id: string; data: string }) => {
-			this.terms.get(String(req.id))?.write(String(req.data));
+		ipcMain.on("pty:write", (_event, req: unknown) => {
+			const r = req as { id?: unknown; data?: unknown } | null;
+			if (r === null || typeof r !== "object") return;
+			if (typeof r.id !== "string" || typeof r.data !== "string") return;
+			this.terms.get(r.id)?.write(r.data);
 		});
-		ipcMain.on("pty:resize", (_event, req: { id: string; cols: number; rows: number }) => {
+		ipcMain.on("pty:resize", (_event, req: unknown) => {
+			const r = req as { id?: unknown; cols?: unknown; rows?: unknown } | null;
+			if (r === null || typeof r !== "object" || typeof r.id !== "string") return;
 			try {
-				this.terms.get(String(req.id))?.resize(Number(req.cols) || 80, Number(req.rows) || 24);
+				this.terms
+					.get(r.id)
+					?.resize(clampDimension(r.cols, 80, MAX_COLS), clampDimension(r.rows, 24, MAX_ROWS));
 			} catch (error) {
 				this.log("warn", `pty resize failed: ${String(error)}`);
 			}
 		});
-		ipcMain.on("pty:kill", (_event, req: { id: string }) => {
-			this.dispose(String(req.id));
+		ipcMain.on("pty:kill", (_event, req: unknown) => {
+			const r = req as { id?: unknown } | null;
+			if (r === null || typeof r !== "object" || typeof r.id !== "string") return;
+			this.dispose(r.id);
 		});
 	}
 
+	private send(id: string, data: string): void {
+		const wc = this.webContents();
+		if (wc !== null && !wc.isDestroyed()) wc.send(`pty:data:${id}`, data);
+	}
+
 	private async create(id: string, cwd: string, cols: number, rows: number): Promise<void> {
-		// Synchronous reservation: everything below this point may await, and a
-		// second create() for the same id must not race past the check. A
+		// Synchronous reservation: everything below the starting.set may await,
+		// and a second create() for the same id must not race past the check. A
 		// create() that lands while one is in flight REPLACES it (StrictMode
 		// remount does exactly this: mount → cleanup-kill → mount again with
-		// the same id). Marking the in-flight spawn abandoned makes IT exit
-		// silently when its shell arrives, and lets THIS call own the id —
-		// dropping this call instead left the renderer's xterm orphaned with
-		// no live process behind it ("cannot type", no output ever).
+		// the same id). Flagging the in-flight reservation abandoned makes THAT
+		// spawn exit silently when its shell arrives, and lets THIS call own
+		// the id — dropping this call instead left the renderer's xterm
+		// orphaned with no live process behind it ("cannot type", no output).
 		if (this.terms.has(id)) return;
-		if (this.starting.has(id)) {
-			this.abandoned.add(id);
+		const previous = this.starting.get(id);
+		if (previous !== undefined) {
+			previous.abandoned = true;
 			this.starting.delete(id);
 		}
-		this.starting.add(id);
-		const send = (data: string): void => {
-			const wc = this.webContents();
-			if (wc !== null && !wc.isDestroyed()) wc.send(`pty:data:${id}`, data);
-		};
+		// Cap counts live AND in-flight terminals (audit 6 L-8): the spawn
+		// awaits a dynamic import, so a cold-start burst otherwise sails past a
+		// terms.size-only check before any terminal lands.
+		if (this.terms.size + this.starting.size >= MAX_TERMINALS) {
+			this.send(id, `\r\n[terminal limit reached (${String(MAX_TERMINALS)})]\r\n`);
+			return;
+		}
+		const reservation: PtyReservation = { abandoned: false };
+		this.starting.set(id, reservation);
 		try {
-			// Cap concurrent terminals; refuse beyond the limit.
-			if (this.terms.size >= MAX_TERMINALS) {
-				send(`\r\n[terminal limit reached (${String(MAX_TERMINALS)})]\r\n`);
-				return;
-			}
-			let scoped: string;
-			try {
-				scoped = this.resolveScoped(cwd);
-			} catch {
-				scoped = this.resolveScoped("/tmp");
-			}
+			// No fallback cwd (audit 6 L-2): the old code retried with "/tmp",
+			// which is never a registered root, so it rethrew anyway — the outer
+			// catch surfaces the failure in the terminal either way.
+			const scoped = this.resolveScoped(cwd);
 			const pty = await import("node-pty");
 			const shell = process.env.SHELL || "/bin/zsh";
 			// posix_spawnp fails if env contains undefined values — sanitize.
@@ -145,10 +196,10 @@ export class PtyService {
 				term = spawnTerm();
 			}
 
-			// The panel may have unmounted while we were awaiting the import or
-			// repairing the helper; without this the shell leaks untracked.
-			if (this.abandoned.has(id)) {
-				this.abandoned.delete(id);
+			// The panel may have unmounted (or been replaced) while we were
+			// awaiting the import or repairing the helper; without this the
+			// shell leaks untracked.
+			if (reservation.abandoned) {
 				try {
 					term.kill();
 				} catch {
@@ -158,27 +209,30 @@ export class PtyService {
 			}
 
 			this.terms.set(id, term);
-			term.onData((data) => send(data));
+			term.onData((data) => this.send(id, data));
 			term.onExit(({ exitCode }) => {
-				send(`\r\n[exit ${String(exitCode)}]\r\n`);
+				this.send(id, `\r\n[exit ${String(exitCode)}]\r\n`);
 				this.terms.delete(id);
 			});
 		} catch (error) {
 			this.log("error", `pty create failed: ${String(error)}`);
 			// Surface the failure in the terminal surface instead of silence.
-			send(`\r\n[terminal failed to start: ${String(error).slice(0, 200)}]\r\n`);
+			this.send(id, `\r\n[terminal failed to start: ${String(error).slice(0, 200)}]\r\n`);
 		} finally {
-			this.starting.delete(id);
-			this.abandoned.delete(id);
+			// Release only OUR reservation. A replacement create owns the id now;
+			// deleting its marker would lose a kill that arrives while it is
+			// still spawning (audit 6 L-8).
+			if (this.starting.get(id) === reservation) this.starting.delete(id);
 		}
 	}
 
 	dispose(id: string): void {
 		const term = this.terms.get(id);
 		if (term === undefined) {
-			// Killed before the spawn finished: mark it so create() reaps the
-			// shell as soon as it exists.
-			if (this.starting.has(id)) this.abandoned.add(id);
+			// Killed before the spawn finished: flag the reservation so create()
+			// reaps the shell as soon as it exists.
+			const reservation = this.starting.get(id);
+			if (reservation !== undefined) reservation.abandoned = true;
 			return;
 		}
 		this.terms.delete(id);
@@ -191,5 +245,8 @@ export class PtyService {
 
 	disposeAll(): void {
 		for (const id of [...this.terms.keys()]) this.dispose(id);
+		// Flag in-flight spawns too: a shell that arrives after the window is
+		// gone (or during quit) must be reaped, not orphaned.
+		for (const reservation of this.starting.values()) reservation.abandoned = true;
 	}
 }

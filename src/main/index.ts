@@ -201,7 +201,13 @@ app.whenReady()
 		});
 		router.handle("workspace.roots", () => ({ roots: bridge.getRoots() }));
 		router.handle("git.context", async (req) => {
-			const ctx = await gitService.context(req.root);
+			// Audit 6 L-2: running git in a renderer-supplied directory lets a
+			// hostile repo's git config (core.fsmonitor and friends) execute code
+			// under renderer compromise — scope to registered roots like every
+			// other fs-touching channel. The composer passes the session cwd,
+			// which session-open already registered.
+			const scoped = await bridge.assertRealScoped(req.root);
+			const ctx = await gitService.context(scoped);
 			return ctx.repo ? (ctx as unknown as import("../shared/pi").JsonValue) : null;
 		});
 		router.handle("workspace.reveal", async (req) => {
@@ -323,6 +329,13 @@ app.whenReady()
 		void sidecar.start();
 
 		router.handle("sidecar.rebuild", async () => {
+			// The History page's refresh button doubles as the degraded-state
+			// recovery affordance (audit 6 L-9): an explicit request retries a
+			// sidecar that exhausted its restart budget. start() is a no-op when
+			// already healthy or starting.
+			if (sidecar?.currentStatus === "degraded") {
+				await sidecar.start();
+			}
 			const data = await sidecar?.post<JsonValue>("/index/rebuild");
 			return data ?? null;
 		});
@@ -373,11 +386,21 @@ app.whenReady()
 				transparent: store.getSettingRaw("windowTransparency") === true,
 				onClosed: () => {
 					bus.setWindow(null);
+					// Audit 6 M-3: window close never runs renderer unmount cleanup,
+					// so pty:kill is never sent — dispose shells like before-quit does.
+					ptyService?.disposeAll();
 				},
 			});
 			bus.setWindow(win);
 			win.on("close", () => {
 				store.setWindowState(win.getBounds());
+			});
+			// Audit 6 M-3: a full reload (⌘R) replaces the renderer without firing
+			// "closed", and new TerminalPanel instances generate fresh pty ids —
+			// the old shells become unreachable. Kill them as the reload starts.
+			// (Fires on the initial load too, when no PTYs exist yet — a no-op.)
+			win.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+				if (isMainFrame && !isInPlace) ptyService?.disposeAll();
 			});
 			return win;
 		};
@@ -410,6 +433,18 @@ app.on("before-quit", (event) => {
 	sidecar = undefined;
 	authService = undefined;
 	ptyService = undefined;
+	// Audit 6 L-1: the window's own "close" handler saves bounds, but on the
+	// quit path it fires after store.stop() closed the DB and the write is
+	// guard-swallowed — ⌘Q used to lose the window position every time.
+	// Snapshot here, while both the window and the store are still alive.
+	const win = BrowserWindow.getAllWindows()[0];
+	if (win !== undefined && !win.isDestroyed()) {
+		try {
+			closingStore?.setWindowState(win.getBounds());
+		} catch {
+			// Never block a quit on a bounds write.
+		}
+	}
 	closingPty?.disposeAll();
 	void closingPi?.disposeAll()
 		.catch(() => {})

@@ -19,6 +19,7 @@ import {
 } from "../../shared/pi";
 import { describeError, type BackendOptions, type IPiBackend } from "./backend";
 import { createPermissionExtension } from "./approve-extension";
+import { getProjectTrustStatus, setProjectTrustDecision } from "./trust";
 import {
 	clearSessionPermissions,
 	getMode,
@@ -45,6 +46,8 @@ interface SessionEntry {
 	backend: IPiBackend;
 	/** Epoch ms when this session was opened — used for "most recent" resolution. */
 	startedAt: number;
+	/** Backing session file, tracked across replacements (used by delete guards). */
+	sessionFile?: string;
 }
 
 /** Lifecycle + event hooks for observers (store, usage capture, UI). */
@@ -79,24 +82,6 @@ export class PiService {
 		this.hooksList.push(hooks);
 	}
 
-	/**
-	 * Most recently opened/used open session, or null. The permission
-	 * extension resolves tool_call events against this session's mode — the
-	 * event payload itself carries no session identity.
-	 */
-	getActiveAppSessionId(): string | null {
-		let latestId: string | null = null;
-		let latest = -1;
-		for (const [id, entry] of this.sessions) {
-			const started = entry.startedAt ?? 0;
-			if (started >= latest) {
-				latest = started;
-				latestId = id;
-			}
-		}
-		return latestId;
-	}
-
 	/** Set by index.ts to persist default-mode changes to StoreService. */
 	onDefaultModeChange?: (mode: PermissionMode) => void;
 
@@ -122,6 +107,19 @@ export class PiService {
 		router.handle("session.create", (req) => this.openSession(req));
 		router.handle("session.resume", (req) => this.resumeSession(req));
 		router.handle("session.list", () => this.listSessions());
+		// Audit 6 H-1: sessions outlive the window; a reopened renderer rehydrates
+		// from this list instead of resuming files into duplicate backends.
+		router.handle("session.list_open", () => this.listOpenSessions());
+		// Audit 6 C-1: renderer pre-flight for project trust. check_trust reports
+		// whether a cwd has trust-requiring .pi resources and whether a decision
+		// exists; grant_trust records the user's choice (upstream ProjectTrustStore
+		// is the canonical writer). The SDK session factory enforces the decision
+		// regardless — these channels only drive the prompt UX.
+		router.handle("session.check_trust", (req) => getProjectTrustStatus(req.cwd));
+		router.handle("session.grant_trust", (req) => {
+			setProjectTrustDecision(req.cwd, req.trusted);
+			return null;
+		});
 		router.handle("session.close", async (req) => {
 			await this.closeSession(req.sessionId);
 			return null;
@@ -216,7 +214,11 @@ export class PiService {
 				};
 				this.bus.send({ type: "pi_event", sessionId: req.sessionId, event });
 				for (const hooks of this.hooksList) {
-					hooks.onSessionEvent?.(req.sessionId, event);
+					try {
+						hooks.onSessionEvent?.(req.sessionId, event);
+					} catch {
+						// Observer isolation (audit 6 M-10).
+					}
 				}
 			}
 		});
@@ -282,6 +284,9 @@ export class PiService {
 			entry.backend.dispose().catch(() => {})
 		);
 		await Promise.all(disposals);
+		for (const entry of this.sessions.values()) {
+			clearSessionPermissions(entry.id);
+		}
 		this.sessions.clear();
 	}
 
@@ -294,6 +299,20 @@ export class PiService {
 		return this.sessions.get(appSessionId)?.cwd ?? "";
 	}
 
+	/** True when an open session is backed by this session file (delete guard). */
+	isSessionFileOpen(sessionFile: string): boolean {
+		return this.findSessionByFile(sessionFile) !== undefined;
+	}
+
+	/** Open session backed by this file, tracked across in-place replacements. */
+	private findSessionByFile(sessionFile: string): SessionEntry | undefined {
+		for (const entry of this.sessions.values()) {
+			if (entry.sessionFile === sessionFile) return entry;
+			if (entry.backend.getSessionFile() === sessionFile) return entry;
+		}
+		return undefined;
+	}
+
 	// ---------------------------------------------------------------------------
 
 	/** Re-fire onSessionOpened observers after an in-place replacement. */
@@ -301,14 +320,20 @@ export class PiService {
 		const entry = this.sessions.get(appSessionId);
 		if (entry === undefined) return;
 		const state = await entry.backend.getState().catch(() => undefined);
+		if (state?.sessionFile !== undefined) entry.sessionFile = state.sessionFile;
 		for (const hooks of this.hooksList) {
-			hooks.onSessionOpened?.({
-				appSessionId,
-				piSessionId: state?.sessionId,
-				sessionFile: state?.sessionFile ?? entry.backend.getSessionFile(),
-				cwd: entry.cwd,
-				backend: entry.backend.kind,
-			});
+			try {
+				hooks.onSessionOpened?.({
+					appSessionId,
+					piSessionId: state?.sessionId,
+					sessionFile: state?.sessionFile ?? entry.backend.getSessionFile(),
+					cwd: entry.cwd,
+					backend: entry.backend.kind,
+				});
+			} catch {
+				// Observer isolation (audit 6 M-10): one throwing hook must not break
+				// the loop or the session lifecycle.
+			}
 		}
 	}
 
@@ -337,12 +362,43 @@ export class PiService {
 		backend?: "sdk" | "rpc";
 		cwd?: string;
 	}): Promise<SessionOpenedResponse> {
+		// Audit 6 H-1: resuming a file already bound to a live backend would spawn
+		// a second runtime appending to the same JSONL. Reattach to the existing
+		// entry instead; the renderer's open() re-focuses and re-hydrates it.
+		const existing = this.findSessionByFile(req.sessionPath);
+		if (existing !== undefined) {
+			const state = await existing.backend.getState().catch(() => undefined);
+			return {
+				sessionId: existing.id,
+				backend: existing.backend.kind,
+				cwd: existing.cwd,
+				sessionFile: existing.sessionFile ?? existing.backend.getSessionFile(),
+				model: state?.model,
+			};
+		}
 		const cwd = resolveResumeCwd(req.sessionPath, req.cwd);
 		return this.startSession({
 			cwd,
 			kind: req.backend ?? "sdk",
 			sessionPath: req.sessionPath,
 		});
+	}
+
+	/** Every open session, shaped like session.create's response (audit 6 H-1). */
+	private async listOpenSessions(): Promise<{ sessions: SessionOpenedResponse[] }> {
+		const sessions = await Promise.all(
+			[...this.sessions.values()].map(async (entry) => {
+				const state = await entry.backend.getState().catch(() => undefined);
+				return {
+					sessionId: entry.id,
+					backend: entry.backend.kind,
+					cwd: entry.cwd,
+					sessionFile: entry.sessionFile ?? entry.backend.getSessionFile(),
+					model: state?.model,
+				};
+			})
+		);
+		return { sessions };
 	}
 
 	private async startSession(opts: {
@@ -378,7 +434,13 @@ export class PiService {
 			...(this.desktopTools.length > 0 ? { desktopTools: this.desktopTools } : {}),
 			onEvent: (event) => {
 				this.bus.send({ type: "pi_event", sessionId: id, event });
-				for (const hooks of this.hooksList) hooks.onSessionEvent?.(id, event);
+				for (const hooks of this.hooksList) {
+					try {
+						hooks.onSessionEvent?.(id, event);
+					} catch {
+						// Observer isolation (audit 6 M-10).
+					}
+				}
 			},
 			onDied: (reason) => {
 				this.bus.send({
@@ -403,27 +465,34 @@ export class PiService {
 			);
 		}
 
+		const state = await backend.getState().catch(() => undefined);
+		const sessionFile = state?.sessionFile ?? backend.getSessionFile();
 		this.sessions.set(id, {
 			id,
 			cwd: opts.cwd,
 			backend,
 			startedAt: Date.now(),
+			...(sessionFile !== undefined ? { sessionFile } : {}),
 		});
-		const state = await backend.getState().catch(() => undefined);
 		for (const hooks of this.hooksList) {
-			hooks.onSessionOpened?.({
-			appSessionId: id,
-			piSessionId: state?.sessionId,
-			sessionFile: state?.sessionFile ?? backend.getSessionFile(),
-				cwd: opts.cwd,
-				backend: backend.kind,
-			});
+			try {
+				hooks.onSessionOpened?.({
+					appSessionId: id,
+					piSessionId: state?.sessionId,
+					sessionFile,
+					cwd: opts.cwd,
+					backend: backend.kind,
+				});
+			} catch {
+				// Observer isolation (audit 6 M-10): the session is registered and
+				// running — a throwing observer must not fail session.create.
+			}
 		}
 		return {
 			sessionId: id,
 			backend: backend.kind,
 			cwd: opts.cwd,
-			sessionFile: state?.sessionFile ?? backend.getSessionFile(),
+			sessionFile,
 			model: state?.model,
 		};
 	}
@@ -433,8 +502,18 @@ export class PiService {
 		if (entry === undefined) return;
 		this.sessions.delete(sessionId);
 		clearSessionPermissions(sessionId);
-		for (const hooks of this.hooksList) hooks.onSessionClosed?.(sessionId);
-		await entry.backend.dispose().catch(() => {});
+		try {
+			for (const hooks of this.hooksList) {
+				try {
+					hooks.onSessionClosed?.(sessionId);
+				} catch {
+					// Observer isolation (audit 6 M-10).
+				}
+			}
+		} finally {
+			// A throwing hook must never orphan a live backend (zombie sessions).
+			await entry.backend.dispose().catch(() => {});
+		}
 	}
 
 	private async listSessions(): Promise<{ sessions: PiSessionSummary[] }> {

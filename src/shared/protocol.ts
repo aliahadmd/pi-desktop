@@ -103,20 +103,6 @@ export type Invoke = <K extends RequestKey>(
 // Main → renderer events
 // ---------------------------------------------------------------------------
 
-export const rendererLogEventSchema = Type.Object({
-	type: Type.Literal("log"),
-	level: Type.Union([
-		Type.Literal("debug"),
-		Type.Literal("info"),
-		Type.Literal("warn"),
-		Type.Literal("error"),
-	]),
-	source: Type.Union([Type.Literal("main"), Type.Literal("renderer")]),
-	args: Type.Array(Type.String()),
-});
-
-export type RendererLogEvent = Static<typeof rendererLogEventSchema>;
-
 /** Envelope routing pi session events to the tab/window that owns them. */
 export interface PiSessionEventEnvelope {
 	type: "pi_event";
@@ -144,7 +130,6 @@ export interface AuthNotifyEvent {
 }
 
 export type IpcEvent =
-	| RendererLogEvent
 	| PiSessionEventEnvelope
 	| SidecarStatusEvent
 	| AuthPromptEvent

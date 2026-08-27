@@ -65,7 +65,11 @@ describe("IpcRouter.dispatch", () => {
 
 	it("accepts extra properties only when the schema allows them", async () => {
 		const strict = await makeRouter().dispatch({ type: "ping", extra: true });
-		// typebox default object schema rejects unknown keys
+		// ping is one of the three app-level StrictObject schemas — ONLY those
+		// reject unknown keys (additionalProperties: false). The pi.* schemas in
+		// shared/pi.ts are plain Type.Object and PASS unknown keys through; no
+		// handler spreads `req` today, but a future `...req` would forward
+		// unvalidated keys (audit 6 L-16).
 		expect(strict.ok).toBe(false);
 	});
 });

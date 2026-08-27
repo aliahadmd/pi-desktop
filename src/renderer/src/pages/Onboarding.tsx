@@ -8,11 +8,19 @@ import type { ProviderAuthInfo } from "../../../shared/pi";
 export function Onboarding({
 	onDone,
 	onSkip,
+	detectionError,
 }: {
 	/** Configuration succeeded: the providers check alone governs future launches. */
 	onDone(): void;
 	/** Dismissed without configuring: the caller persists that choice. */
 	onSkip(): void;
+	/**
+	 * Set when provider DETECTION failed (e.g. keychain locked) rather than
+	 * coming back empty — "all errored" is not "none configured" (audit 6
+	 * M-26). The form still works: a manually entered key doesn't depend on
+	 * the failed read.
+	 */
+	detectionError?: string;
 }): React.JSX.Element {
 	const [providers, setProviders] = useState<ProviderAuthInfo[]>([]);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -22,7 +30,10 @@ export function Onboarding({
 
 	const load = useCallback(async (): Promise<void> => {
 		const result = await window.piDesktop.invoke({ type: "auth.providers" });
-		if (!result.ok) return;
+		if (!result.ok) {
+			setError(`Could not load providers: ${result.error.message}`);
+			return;
+		}
 		const withLogin = result.data.providers.filter(
 			(p) => p.authType !== "none" || p.modelCount > 0
 		);
@@ -72,6 +83,16 @@ export function Onboarding({
 				<p className="mt-1 text-xs text-neutral-400">
 					Configure a provider to start using the agent. You can add more later in Models.
 				</p>
+
+				{detectionError !== undefined && (
+					<div
+						className="mt-3 rounded border border-amber-900 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
+						data-testid="onboarding-detection-error"
+					>
+						Provider detection failed: {detectionError} Your existing keys may be
+						fine — entering one manually still works.
+					</div>
+				)}
 
 				{error !== null && (
 					<div className="mt-3 rounded border border-danger/40 bg-danger-soft/50 px-3 py-2 text-xs text-red-300">

@@ -15,6 +15,9 @@ import type {
 } from "../../../shared/pi";
 import { DEFAULT_PERMISSION_MODE, isPermissionMode } from "../../../shared/pi";
 import { useSessions } from "../stores/pi-sessions";
+import { confirmDockEditorClose } from "../stores/dock-dirty";
+import { ensureProjectTrust } from "../lib/trust";
+import { warnRpcUngatedOnce } from "../lib/rpc-gate-warning";
 import { nextActiveTerminalTab } from "../lib/terminal-tabs";
 import { Transcript } from "../components/chat/Transcript";
 import { Composer } from "../components/chat/Composer";
@@ -104,10 +107,14 @@ export default function ChatPage({
 		};
 	}, [activeId]);
 
-	// Seed the permission mode when the active session changes.
+	// Seed the permission mode when the active session changes, and re-seed
+	// after every session rebuild (session_replaced) since the new runtime
+	// starts back at the default mode. RPC sessions are skipped: nothing
+	// reads the mode there (no gate crosses the subprocess boundary, H-3).
 	useEffect(() => {
 		setPermissionMode(DEFAULT_PERMISSION_MODE);
 		if (activeId === null) return;
+		if (useSessions.getState().sessions[activeId]?.backend === "rpc") return;
 		let cancelled = false;
 		void window.piDesktop
 			.invoke({ type: "permission.get_mode", sessionId: activeId })
@@ -120,9 +127,30 @@ export default function ChatPage({
 		return () => {
 			cancelled = true;
 		};
-	}, [activeId]);
+	}, [activeId, activeId === null ? undefined : sessions[activeId]?.replacedNonce]);
 
 	const [dockWidth, setDockWidth] = useState(320);
+
+	// Dock panels stay MOUNTED across tab switches (audit 6 M-28): switching
+	// to Files mid-`npm run dev` used to unmount TerminalPanel and kill every
+	// shell, and it discarded the file explorer's editor state (M-22). Panels
+	// mount lazily on first visit; the visited set resets when the dock closes
+	// so reopening it doesn't resurrect hidden terminals.
+	const [visitedDockTabs, setVisitedDockTabs] = useState<Set<Exclude<DockTab, null>>>(
+		new Set()
+	);
+	const [prevDockTab, setPrevDockTab] = useState<DockTab>(dockTab);
+	if (dockTab !== prevDockTab) {
+		// React's render-time derived-state pattern: adjust before commit so
+		// children never mount against a stale visited set.
+		setPrevDockTab(dockTab);
+		setVisitedDockTabs((prev) => {
+			if (dockTab === null) return new Set();
+			const next = new Set(prev);
+			next.add(dockTab);
+			return next;
+		});
+	}
 
 	useEffect(() => {
 		void window.piDesktop
@@ -147,16 +175,23 @@ export default function ChatPage({
 
 	// ⌘J toggles the Terminal dock tab; ⌘K opens the command palette; Esc
 	// closes the open dock panel (the panel has no header of its own).
+	// Closing the dock unmounts the file editor — guard its unsaved draft
+	// first (audit 6 M-22).
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
 			const key = e.key.toLowerCase();
 			if ((e.metaKey || e.ctrlKey) && key === "j") {
 				e.preventDefault();
-				setDockTab((prev: DockTab) => (prev === "terminal" ? null : "terminal"));
+				setDockTab((prev: DockTab) => {
+					if (prev === null) return "terminal";
+					if (prev !== "terminal") return "terminal";
+					// Toggling the terminal OFF closes the dock.
+					return confirmDockEditorClose() ? null : prev;
+				});
 			}
 			if (key === "escape" && dockTab !== null) {
 				e.preventDefault();
-				setDockTab(null);
+				if (confirmDockEditorClose()) setDockTab(null);
 			}
 			if ((e.metaKey || e.ctrlKey) && key === "k") {
 				e.preventDefault();
@@ -193,7 +228,12 @@ export default function ChatPage({
 		setCreateError(null);
 		try {
 			const picked = await window.piDesktop.invoke({ type: "app_pick_directory" });
-			if (!picked.ok || picked.data.path === null) return;
+			if (!picked.ok) {
+				reportCreateError(`Directory pick failed: ${picked.error.message}`);
+				return;
+			}
+			if (picked.data.path === null) return;
+			if (!(await ensureProjectTrust(picked.data.path))) return;
 			const result = await window.piDesktop.invoke({
 				type: "session.create",
 				cwd: picked.data.path,
@@ -201,12 +241,21 @@ export default function ChatPage({
 			});
 			if (result.ok) {
 				open(result.data);
+				// RPC sessions have no permission gate (audit 6 H-3) — say so once.
+				if (result.data.backend === "rpc") warnRpcUngatedOnce(result.data.sessionId);
 			} else {
-				setCreateError(`${backend.toUpperCase()} session failed: ${result.error.message}`);
+				reportCreateError(`${backend.toUpperCase()} session failed: ${result.error.message}`);
 			}
 		} finally {
 			setCreating(false);
 		}
+	}
+
+	// Audit 6 M-18: the empty-state error box only renders when NO session is
+	// open; with a live session the failure must go to its transcript instead.
+	function reportCreateError(message: string): void {
+		if (activeId !== null) pushErrorNotice(activeId, message);
+		else setCreateError(message);
 	}
 
 	function send(
@@ -215,24 +264,37 @@ export default function ChatPage({
 		streamingBehavior?: "steer" | "followUp"
 	): void {
 		if (activeId === null) return;
-		if (text.length > 0) addUserBlock(activeId, text);
+		const sessionId = activeId; // captured: the prompt belongs to this session
+		// Optimistic user block; rolled back when the prompt is rejected so a
+		// failed send never leaves a phantom "sent" message (audit 6 M-15).
+		const blockId = text.length > 0 ? addUserBlock(sessionId, text) : null;
 		play("sent");
 		void window.piDesktop
 			.invoke({
 				type: "session.prompt",
-				sessionId: activeId,
+				sessionId,
 				text,
 				...(images.length > 0 ? { images } : {}),
 				...(streamingBehavior !== undefined ? { streamingBehavior } : {}),
 			})
 			.then((result) => {
 				if (!result.ok) {
-					pushErrorNotice(activeId, `Prompt rejected: ${result.error.message}`);
-					play("error");
+					promptFailed(result.error.message);
 				} else {
-					refreshState(activeId);
+					refreshState(sessionId);
 				}
+			})
+			.catch((err: unknown) => {
+				promptFailed(err instanceof Error ? err.message : String(err));
 			});
+
+		function promptFailed(message: string): void {
+			if (blockId !== null) useSessions.getState().removeBlock(sessionId, blockId);
+			// Hand the rejected text back to the composer so it isn't lost.
+			if (text.length > 0) setInsertedText(text);
+			pushErrorNotice(sessionId, `Prompt rejected: ${message}`);
+			play("error");
+		}
 	}
 
 	function closeTerminalTab(index: number): void {
@@ -254,7 +316,8 @@ export default function ChatPage({
 			})
 			.then((r) => {
 				if (!r.ok) pushErrorNotice(activeId, r.error.message);
-			});
+			})
+			.catch(() => {});
 	}
 
 	return (
@@ -367,13 +430,26 @@ export default function ChatPage({
 									{/* No panel header: the top bar's action icons own
 									    switching and closing (Esc also closes). */}
 									<div className="min-h-0 flex-1 overflow-y-auto">
-									{dockTab === "files" && <FileExplorer cwd={active.cwd} />}
-									{dockTab === "review" && <ReviewQueue blocks={active.blocks} />}
-									{dockTab === "commands" && (
-										<CommandsBrowser sessionId={active.id} onInsert={(text) => setInsertedText(text)} />
+									{/* Every visited panel stays mounted; only the active one is
+									    visible (audit 6 M-28: conditional unmount killed terminals
+									    and discarded editor drafts on every tab switch). */}
+									{visitedDockTabs.has("files") && (
+										<div className={dockTab === "files" ? "h-full" : "hidden"}>
+											<FileExplorer cwd={active.cwd} />
+										</div>
 									)}
-									{dockTab === "terminal" && (
-									<div className="flex h-full flex-col">
+									{visitedDockTabs.has("review") && (
+										<div className={dockTab === "review" ? undefined : "hidden"}>
+											<ReviewQueue blocks={active.blocks} />
+										</div>
+									)}
+									{visitedDockTabs.has("commands") && (
+										<div className={dockTab === "commands" ? "h-full" : "hidden"}>
+											<CommandsBrowser sessionId={active.id} onInsert={(text) => setInsertedText(text)} />
+										</div>
+									)}
+									{visitedDockTabs.has("terminal") && (
+									<div className={dockTab === "terminal" ? "flex h-full flex-col" : "hidden"}>
 										{/* Terminal tab bar */}
 										<div className="flex h-7 shrink-0 items-center gap-0.5 border-b border-neutral-800 px-1">
 											{terminalTabs.map((tab, i) => (
@@ -391,6 +467,7 @@ export default function ChatPage({
 													<span
 														role="button"
 														tabIndex={0}
+														aria-label={`Close ${tab.label}`}
 														onClick={(e) => {
 															e.stopPropagation();
 															closeTerminalTab(i);
@@ -398,9 +475,9 @@ export default function ChatPage({
 														onKeyDown={(e) => {
 															if (e.key === "Enter") closeTerminalTab(i);
 														}}
-														className="ml-0.5 text-neutral-600 hover:text-danger"
+														className="ml-0.5 flex items-center text-neutral-600 hover:text-danger"
 													>
-														×
+														<X size={10} strokeWidth={2} />
 													</span>
 												</button>
 											))}
@@ -424,13 +501,14 @@ export default function ChatPage({
 												<TerminalPanel
 													key={tab.id}
 													cwd={active.cwd}
-													active={i === activeTermTab}
+													active={dockTab === "terminal" && i === activeTermTab}
 												/>
 											))}
 										</div>
 									</div>
 								)}
-								{dockTab === "tree" && (
+								{visitedDockTabs.has("tree") && (
+										<div className={dockTab === "tree" ? "h-full" : "hidden"}>
 										<SessionTreePanel
 											sessionId={active.id}
 											refreshKey={treeRefreshKey}
@@ -448,7 +526,8 @@ export default function ChatPage({
 													.then((r) => {
 														if (!r.ok) pushErrorNotice(active.id, r.error.message);
 														else setTreeRefreshKey((k) => k + 1);
-													});
+													})
+													.catch(() => {});
 											}}
 											onFork={(entryId) => {
 												void window.piDesktop
@@ -460,9 +539,11 @@ export default function ChatPage({
 													.then((r) => {
 														if (!r.ok) pushErrorNotice(active.id, r.error.message);
 														else setTreeRefreshKey((k) => k + 1);
-													});
+													})
+													.catch(() => {});
 											}}
 										/>
+										</div>
 									)}
 								</div>
 							</motion.div>
@@ -473,8 +554,19 @@ export default function ChatPage({
 
 					<div className="shrink-0">
 						<Composer
-							insertText={insertedText}
-							onInsertHandled={() => setInsertedText(null)}
+							// Keyed per session: draft text and attachments belong to the
+							// session they were composed for, not whichever session is
+							// active after a switch (audit 6 L-13).
+							key={active.id}
+							insertText={active.insertText ?? insertedText}
+							onInsertHandled={() => {
+								// Extension-pushed text (ui_editor_text, M-11) clears in the
+								// store; local palette/command inserts clear locally.
+								if (active.insertText !== undefined) {
+									useSessions.getState().clearInsertText(active.id);
+								}
+								setInsertedText(null);
+							}}
 							streaming={active.phase !== "idle"}
 							queueCount={active.queue.steering.length + active.queue.followUp.length}
 							projectRoot={active.cwd}
@@ -486,7 +578,15 @@ export default function ChatPage({
 									? active.cwd.split("/").filter(Boolean).pop()
 									: undefined
 							}
-							permissionMode={permissionMode}
+							{...(active.backend === "rpc"
+								? {
+										// RPC has no permission gate (audit 6 H-3): hide the
+										// picker so it cannot promise gating nothing enforces,
+										// and show a persistent annotation instead.
+										permissionGateNote:
+											"RPC sessions run without the permission gate — every tool call executes without asking.",
+									}
+								: { permissionMode })}
 							onPickPermissionMode={(mode) => {
 								if (activeId === null) return;
 								const previous = permissionMode;
@@ -505,7 +605,8 @@ export default function ChatPage({
 											setPermissionMode(previous); // roll back
 											pushErrorNotice(active.id, r.error.message);
 										}
-									});
+									})
+									.catch(() => setPermissionMode(previous));
 							}}
 							models={catalog}
 						currentModel={active.model}
@@ -521,7 +622,8 @@ export default function ChatPage({
 								.then((r) => {
 									if (!r.ok) pushErrorNotice(active.id, r.error.message);
 									else refreshState(active.id);
-								});
+								})
+								.catch(() => {});
 						}}
 						thinkingLevel={active.thinkingLevel}
 						supportedThinkingLevels={thinkingSupported}
@@ -591,23 +693,15 @@ export default function ChatPage({
 													setCompacting(false);
 													if (!r.ok) {
 														pushErrorNotice(active.id, r.error.message);
-													} else {
-														const data = r.data as {
-															tokensBefore?: number;
-															estimatedTokensAfter?: number;
-														};
-														useSessions
-															.getState()
-															.pushNotice(
-																active.id,
-																`Context compacted: ${String(data?.tokensBefore ?? "?")} → ${String(data?.estimatedTokensAfter ?? "?")} tokens.`,
-																"info"
-															);
 													}
+													// No success notice here: ingest's compaction_end
+													// handler already posts "Context compacted." —
+													// a second one duplicated it (audit 6 L-13).
 													setCompactOpen(false);
 													setCompactInstructions("");
 													refreshState(active.id);
-												});
+												})
+												.catch(() => setCompacting(false));
 										}}
 										className="rounded bg-info px-3 py-1.5 text-xs text-white hover:bg-info/80 disabled:opacity-40"
 									>
@@ -642,6 +736,10 @@ export default function ChatPage({
 
 					{paletteOpen && active !== undefined && (
 						<CommandPalette
+							// Keyed per session: an in-progress rename/query must not
+							// carry over to a different session after a switch
+							// (audit 6 L-13).
+							key={active.id}
 							sessionId={active.id}
 							onClose={() => setPaletteOpen(false)}
 							onOpenSheet={(kind) => onOpenSheet?.(kind)}
@@ -658,15 +756,23 @@ export default function ChatPage({
 							<button
 								type="button"
 								onClick={() => {
-									void window.piDesktop
-										.invoke({
-											type: "session.create",
-											cwd: active.cwd,
-											backend: active.backend,
+									void ensureProjectTrust(active.cwd)
+										.then((trusted) => {
+											if (!trusted) return;
+											void window.piDesktop
+												.invoke({
+													type: "session.create",
+													cwd: active.cwd,
+													backend: active.backend,
+												})
+												.then((r) => {
+													if (r.ok) open(r.data);
+													// A failed reconnect must say so, not no-op.
+													else pushErrorNotice(active.id, `Reconnect failed: ${r.error.message}`);
+												})
+												.catch(() => {});
 										})
-										.then((r) => {
-											if (r.ok) open(r.data);
-										});
+										.catch(() => {});
 								}}
 								className="rounded bg-red-800 px-2.5 py-0.5 text-[10px] text-white hover:bg-red-700"
 							>

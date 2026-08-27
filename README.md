@@ -21,8 +21,8 @@ timeline, and [AGENTS.md](AGENTS.md) for the working rulebook.
 | 6 (ch 28–30) | Projects: pinning, sort, create/open, sidebar project rows, top app bar | `piplan/Phase-6/STATUS.md` |
 | 7 (ch 31–33) | Appearance: theme engine (5 presets incl. light), UI scale, transparency, theme-aware syntax highlighting, richer history rows | `piplan/Phase-7/STATUS.md` |
 
-Verification at this commit: typecheck clean · **198 unit** tests (30 files) ·
-**34 e2e** · **14 sidecar pytest**.
+Verification at this commit: typecheck clean · **380 unit** tests (70 files) ·
+**34 e2e** · **26 sidecar pytest**.
 
 Five audit cycles are recorded in `pibugs/`; open items from the latest are
 listed under "Current state" in [aboutproject.md](aboutproject.md).
@@ -83,13 +83,13 @@ node node_modules/esbuild/install.js && node node_modules/electron/install.js
 ## Layout
 
 ```
-src/shared/    IPC contract (81 channels: types + typebox schemas), theme presets
+src/shared/    IPC contract (85 channels: types + typebox schemas), theme presets
                — no electron/node imports
 src/main/      Main process: router, event bus, pi backends, store, sidecar mgr
 src/preload/   contextBridge surface (window.piDesktop)
 src/renderer/  React 19 + Tailwind 4 UI (pages, components, zustand stores)
 sidecar/       Python FastAPI service: FTS5 search + analytics
-tests/unit/    vitest unit tests (27 files)
+tests/unit/    vitest unit tests (70 files)
 tests/e2e/     Playwright _electron tests
 docs/          security.md, privacy, release, troubleshooting, ch1–8 status
 ```

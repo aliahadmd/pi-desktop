@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sortProjects, type ProjectSortMode } from "../../lib/project-sort";
+import { ensureProjectTrust } from "../../lib/trust";
+import { warnRpcUngatedOnce } from "../../lib/rpc-gate-warning";
 import { ProjectRow } from "./ProjectRow";
 import { useSessions } from "../../stores/pi-sessions";
 
@@ -126,7 +128,8 @@ export function Sidebar({
 						path: p.path,
 						name: p.name ?? p.path.split("/").filter(Boolean).pop() ?? p.path,
 						pinned: p.pinned,
-						pinnedAt: /* not exposed over IPC; order arrives pre-sorted */ 0,
+						// Real pin time over IPC (audit 6 L-14) — pinned sort orders by it.
+						pinnedAt: p.pinnedAt ?? 0,
 						sessionCount: p.sessionCount,
 					})),
 				);
@@ -163,6 +166,7 @@ export function Sidebar({
 
 	async function createInProject(cwd: string): Promise<void> {
 		setCreateError(null);
+		if (!(await ensureProjectTrust(cwd))) return;
 		const result = await window.piDesktop.invoke({
 			type: "session.create",
 			cwd,
@@ -257,6 +261,7 @@ export function Sidebar({
 		if (resuming.has(s.id)) return;
 		setResuming((prev) => new Set(prev).add(s.id));
 		try {
+			if (s.cwd !== null && !(await ensureProjectTrust(s.cwd))) return;
 			const result = await window.piDesktop.invoke({
 				type: "session.resume",
 				sessionPath: s.filePath,
@@ -297,6 +302,7 @@ export function Sidebar({
 		setCreateError(null);
 		const picked = await window.piDesktop.invoke({ type: "app_pick_directory" });
 		if (!picked.ok || picked.data.path === null) return;
+		if (!(await ensureProjectTrust(picked.data.path))) return;
 		const result = await window.piDesktop.invoke({
 			type: "session.create",
 			cwd: picked.data.path,
@@ -310,6 +316,8 @@ export function Sidebar({
 		useSessions.getState().open(
 			data as unknown as import("../../../../shared/pi").SessionOpenedResponse
 		);
+		// RPC sessions have no permission gate (audit 6 H-3) — say so once.
+		if (data.backend === "rpc") warnRpcUngatedOnce(data.sessionId);
 	}
 
 	// Close the profile menu on Escape or any click outside the footer card.
@@ -628,7 +636,12 @@ export function Sidebar({
 								onClick={() => {
 									void window.piDesktop
 										.invoke({ type: "session.delete_file", sessionPath: confirmDelete })
-										.then(() => {
+										.then((r) => {
+											if (!r.ok) {
+												setConfirmDelete(null);
+												setCreateError(r.error.message);
+												return;
+											}
 											setConfirmDelete(null);
 											void load();
 										});

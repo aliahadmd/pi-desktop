@@ -163,6 +163,7 @@ export type UiDialogRequest =
 			method: "editor";
 			title: string;
 			prefill?: string;
+			timeoutMs?: number;
 	  };
 
 export interface UiDialogResponse {
@@ -279,6 +280,26 @@ export const sessionResumeRequestSchema = Type.Object({
 
 export const sessionListRequestSchema = Type.Object({
 	type: Type.Literal("session.list"),
+});
+
+/**
+ * Sessions currently open in the main process (audit 6 H-1). They outlive the
+ * window, so a reopened/reloaded renderer rehydrates from this list instead of
+ * resuming the same files into duplicate backends.
+ */
+export const sessionListOpenRequestSchema = Type.Object({
+	type: Type.Literal("session.list_open"),
+});
+
+export const sessionCheckTrustRequestSchema = Type.Object({
+	type: Type.Literal("session.check_trust"),
+	cwd: Type.String({ minLength: 1 }),
+});
+
+export const sessionGrantTrustRequestSchema = Type.Object({
+	type: Type.Literal("session.grant_trust"),
+	cwd: Type.String({ minLength: 1 }),
+	trusted: Type.Boolean(),
 });
 
 export const sessionCloseRequestSchema = Type.Object({
@@ -836,6 +857,9 @@ export const piRequestSchemas = {
 	"session.create": sessionCreateRequestSchema,
 	"session.resume": sessionResumeRequestSchema,
 	"session.list": sessionListRequestSchema,
+	"session.list_open": sessionListOpenRequestSchema,
+	"session.check_trust": sessionCheckTrustRequestSchema,
+	"session.grant_trust": sessionGrantTrustRequestSchema,
 	"session.close": sessionCloseRequestSchema,
 	"session.prompt": sessionPromptRequestSchema,
 	"session.steer": sessionSteerRequestSchema,
@@ -924,6 +948,9 @@ export interface PiResponseMap {
 	"session.create": SessionOpenedResponse;
 	"session.resume": SessionOpenedResponse;
 	"session.list": { sessions: PiSessionSummary[] };
+	"session.list_open": { sessions: SessionOpenedResponse[] };
+	"session.check_trust": { requiresTrust: boolean; trusted: boolean };
+	"session.grant_trust": null;
 	"session.close": null;
 	"session.prompt": null;
 	"session.steer": null;
@@ -961,6 +988,7 @@ export interface PiResponseMap {
 			path: string;
 			name: string | null;
 			pinned: boolean;
+			pinnedAt: number | null;
 			sessionCount: number;
 			lastOpenedAt: number | null;
 		}>;

@@ -38,7 +38,11 @@ describe("main window event-bus wiring", () => {
 	});
 
 	it("onClosed nulls the bus window", () => {
-		expect(INDEX_TS).toMatch(/onClosed:\s*\(\)\s*=>\s*\{\s*bus\.setWindow\(null\);?\s*\}/);
+		// The body may also run other window-close cleanup (audit 6 M-3 disposes
+		// PTYs there); the pin is that the bus window is nulled inside it.
+		const onClosed = INDEX_TS.match(/onClosed:\s*\(\)\s*=>\s*\{([\s\S]*?)\}/);
+		expect(onClosed).not.toBeNull();
+		expect(onClosed?.[1]).toContain("bus.setWindow(null)");
 	});
 
 	it("second-instance recovers by spawning a window when none exists", () => {

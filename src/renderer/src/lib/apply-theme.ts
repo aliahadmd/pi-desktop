@@ -2,8 +2,9 @@
  * Apply a theme preset to the document (phase 7, ch31).
  *
  * Writes each preset token to the root element as a `--pi-<kebab-name>`
- * custom property, and toggles `data-theme-dark` for CSS that needs a
- * dark/light branch.
+ * custom property, and toggles `data-theme-dark` — index.css consumes it to
+ * set `color-scheme`, so native widgets (checkboxes, radios, scrollbars)
+ * follow the preset's dark/light branch.
  *
  * NOTE: preset keys are camelCase (`surface2`, `accentSoft`) while the
  * stylesheet reads kebab-case (`--pi-surface-2`, `--pi-accent-soft`).

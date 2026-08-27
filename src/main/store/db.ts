@@ -77,6 +77,11 @@ export function openDatabase(dbPath: string): Database.Database {
 	db.pragma("journal_mode = WAL");
 	db.pragma("foreign_keys = ON");
 	db.pragma("synchronous = NORMAL");
+	// The Python sidecar shares this file and commits per batch while indexing
+	// (audit 6 M-13). Make the busy timeout explicit — 3000 ms mirrors the
+	// sidecar's own pragma: long enough to ride out one batch, and it bounds
+	// main-process stalls below the better-sqlite3 default of 5000 ms.
+	db.pragma("busy_timeout = 3000");
 	migrate(db);
 	return db;
 }

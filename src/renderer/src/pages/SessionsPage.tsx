@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import type { SidecarSearchHit, SessionOpenedResponse } from "../../../shared/pi";
+import { ensureProjectTrust } from "../lib/trust";
 
 interface IndexedSession {
 	id: string;
@@ -119,26 +120,31 @@ export function SessionsPage({
 
 	useEffect(() => {
 		let cancelled = false;
-		void (async () => {
-			await load(query);
-			if (cancelled) return;
-			if (query.trim().length === 0) {
-				setHits(null);
-				return;
-			}
-			const sidecarResult = await window.piDesktop.invoke({
-				type: "sidecar.search",
-				query,
-			});
-			if (cancelled) return;
-			if (sidecarResult.ok && sidecarResult.data !== null) {
-				setHits((sidecarResult.data as { hits: SidecarSearchHit[] }).hits);
-			} else {
-				setHits(null); // sidecar unavailable — LIKE fallback already applied
-			}
-		})();
+		// Debounce like the Sidebar's 200 ms: two IPCs per raw keystroke was
+		// hammering both the local DB and the sidecar (audit 6 L-12).
+		const debounce = setTimeout(() => {
+			void (async () => {
+				await load(query);
+				if (cancelled) return;
+				if (query.trim().length === 0) {
+					setHits(null);
+					return;
+				}
+				const sidecarResult = await window.piDesktop.invoke({
+					type: "sidecar.search",
+					query,
+				});
+				if (cancelled) return;
+				if (sidecarResult.ok && sidecarResult.data !== null) {
+					setHits((sidecarResult.data as { hits: SidecarSearchHit[] }).hits);
+				} else {
+					setHits(null); // sidecar unavailable — LIKE fallback already applied
+				}
+			})();
+		}, 200);
 		return () => {
 			cancelled = true;
+			clearTimeout(debounce);
 		};
 	}, [query, load]);
 
@@ -157,6 +163,7 @@ export function SessionsPage({
 	async function resume(session: IndexedSession): Promise<void> {
 		setBusy(true);
 		try {
+			if (session.cwd !== null && !(await ensureProjectTrust(session.cwd))) return;
 			const result = await window.piDesktop.invoke({
 				type: "session.resume",
 				sessionPath: session.filePath,
@@ -173,11 +180,42 @@ export function SessionsPage({
 		}
 	}
 
+	/**
+	 * Open an FTS message-match hit (audit 6 L-15). The hit matched message
+	 * TEXT; the LIKE metadata search below may not list the session at all, so
+	 * a bare sessions.find() silently no-oped. Fall back to an id lookup over
+	 * the full index, and say something when the row is genuinely gone.
+	 */
+	async function openHit(hit: SidecarSearchHit): Promise<void> {
+		const listed = sessions.find((s) => s.id === hit.session_id);
+		if (listed !== undefined) {
+			await resume(listed);
+			return;
+		}
+		const all = await window.piDesktop.invoke({ type: "db.sessions.list", limit: 500 });
+		const row = all.ok
+			? (all.data.sessions as IndexedSession[]).find((s) => s.id === hit.session_id)
+			: undefined;
+		if (row !== undefined) {
+			await resume(row);
+		} else {
+			setError("That session is no longer indexed — press Refresh and try again.");
+		}
+	}
+
 	async function remove(session: IndexedSession): Promise<void> {
-		await window.piDesktop.invoke({
+		// The delete can now be refused (unindexed path, or the session is open) —
+		// surface the reason instead of silently keeping the row (audit 6 H-5).
+		const result = await window.piDesktop.invoke({
 			type: "session.delete_file",
 			sessionPath: session.filePath,
 		});
+		if (!result.ok) {
+			setError(result.error.message);
+			return;
+		}
+		// Drop its FTS hits too, or they stay behind as dead clicks (L-15).
+		setHits((prev) => prev?.filter((h) => h.session_id !== session.id) ?? prev);
 		await load(query);
 	}
 
@@ -208,7 +246,7 @@ export function SessionsPage({
 					<button
 						type="button"
 						disabled={busy}
-						onClick={() => void refreshAll()}
+						onClick={() => void refreshAll().catch(() => {})}
 						className="rounded bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
 					>
 						Refresh
@@ -231,10 +269,7 @@ export function SessionsPage({
 							<button
 								key={`${hit.session_id}-${hit.entry_id}`}
 								type="button"
-								onClick={() => {
-									const target = sessions.find((s) => s.id === hit.session_id);
-									if (target !== undefined) void resume(target);
-								}}
+								onClick={() => void openHit(hit).catch(() => {})}
 								className="block w-full px-4 py-2 text-left hover:bg-neutral-900"
 							>
 								<div className="break-words text-xs text-neutral-300">
@@ -293,7 +328,7 @@ export function SessionsPage({
 								<button
 									type="button"
 									disabled={busy}
-									onClick={() => void resume(s)}
+									onClick={() => void resume(s).catch(() => {})}
 									className="rounded bg-blue-700 px-2.5 py-1 text-[10px] text-on-accent hover:bg-blue-600 disabled:opacity-40"
 								>
 									Resume
@@ -301,7 +336,7 @@ export function SessionsPage({
 								<button
 									type="button"
 									disabled={busy}
-									onClick={() => void remove(s)}
+									onClick={() => void remove(s).catch(() => {})}
 									className="rounded px-2 py-1 text-[10px] text-neutral-500 hover:bg-danger-soft hover:text-danger"
 								>
 									Delete
@@ -359,7 +394,7 @@ export function SessionsPage({
 										key={t.id ?? t.cwd ?? t.name}
 										type="button"
 										disabled={target === undefined}
-										onClick={() => target !== undefined && void resume(target)}
+										onClick={() => target !== undefined && void resume(target).catch(() => {})}
 										title={target !== undefined ? "Resume this session" : (t.cwd ?? undefined)}
 										className="flex items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-neutral-900 disabled:cursor-default"
 									>

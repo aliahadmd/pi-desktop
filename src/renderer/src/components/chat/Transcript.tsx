@@ -19,11 +19,13 @@ export function Transcript({
 	const parentRef = useRef<HTMLDivElement>(null);
 	const stickToBottom = useRef(true);
 	const blocks = useMemo(() => groupToolRuns(rawBlocks), [rawBlocks]);
-	const toggleExpanded = useTranscriptUi((st) => st.toggleExpanded);
+	const setExpanded = useTranscriptUi((st) => st.setExpanded);
 	// Clicking a tool chip in an assistant message expands that tool's output.
-	// Tool blocks are keyed by their toolCallId, so the ui key lines up.
+	// Tool blocks are keyed by their toolCallId, so the ui key lines up. This
+	// pins the row open explicitly (audit 6 M-17): a toggle with the wrong
+	// fallback collapsed the row instead when the tool was still running.
 	const onToolClick = (toolCallId: string): void => {
-		toggleExpanded(`${sessionId}:${toolCallId}`, false);
+		setExpanded(`${sessionId}:${toolCallId}`, true);
 	};
 
 	const virtualizer = useVirtualizer({

@@ -101,6 +101,9 @@ export function ModelPicker({
 	const label =
 		current !== undefined ? current.name : models.length > 0 ? "Select model" : "no model";
 
+	// Flat render-order index counter, reset per render; must mirror `flat`.
+	let nextFlatIdx = 0;
+
 	return (
 		<span className="relative">
 			<button
@@ -166,7 +169,9 @@ export function ModelPicker({
 										{provider}
 									</div>
 									{ms.map((m) => {
-										const idx = flat.indexOf(m);
+										// Running counter, NOT flat.indexOf(m): indexOf inside the
+										// map made each render O(n²) over the catalog (audit 6 L-12).
+										const idx = nextFlatIdx++;
 										const active = current !== undefined && current.provider === m.provider && current.id === m.id;
 										return (
 											<button

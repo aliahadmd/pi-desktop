@@ -81,4 +81,21 @@ describe("IPC channel coverage", () => {
 			}
 		}
 	});
+
+	// Audit 6 L-3: the forward direction alone can't detect an allowlisted
+	// channel that later GAINS a caller — the exemption then silently shadows
+	// real coverage. Assert both directions: allowlisted ⇔ caller-free.
+	it("allowlisted channels are still caller-free (stale exemptions fail)", () => {
+		const stale: string[] = [];
+		for (const channel of Object.keys(ALLOWLIST)) {
+			const called = files.some((content) => content.includes(`"${channel}"`));
+			if (called) stale.push(channel);
+		}
+		if (stale.length > 0) {
+			throw new Error(
+				`allowlisted channels now have a renderer caller: ${stale.join(", ")}` +
+					"\nRemove their ALLOWLIST entries — the exemption is no longer needed."
+			);
+		}
+	});
 });

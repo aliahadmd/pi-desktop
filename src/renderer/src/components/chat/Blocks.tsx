@@ -2,7 +2,7 @@
  * Transcript blocks: user, assistant (markdown + thinking + inline tool chips),
  * tool calls with live output/diffs, tool groups (ch17), notices.
  */
-import { memo, useState, type ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { useTranscriptUi } from "../../stores/transcript-ui";
 import Ansi from "ansi-to-react";
 import { DiffView, isDiff } from "../common/CodeView";
@@ -168,7 +168,11 @@ const AssistantBlockView = memo(function AssistantBlockView({
 	onToolClick: ((toolCallId: string) => void) | undefined;
 }) {
 	const streaming = block.status === "streaming";
-	const [copied, setCopied] = useState(false);
+	// Copy feedback lives in transcript-ui, not useState: rows are virtualized
+	// and unmount on scroll, so local state was lost and its 1200 ms reset
+	// timer fired into an unmounted component (audit 6 L-12).
+	const copyKey = `${sessionId}:${block.id}`;
+	const copied = useTranscriptUi((s) => s.isCopied(copyKey));
 	return (
 		<div className="px-4 py-2" data-kind="assistant" data-status={block.status}>
 			{block.parts.map((part, i) => {
@@ -220,10 +224,11 @@ const AssistantBlockView = memo(function AssistantBlockView({
 									.filter((p) => p.type === "text")
 									.map((p) => p.text)
 									.join("\n");
+								const { markCopied, unmarkCopied } = useTranscriptUi.getState();
 								void navigator.clipboard.writeText(text).then(() => {
-									setCopied(true);
-									setTimeout(() => setCopied(false), 1200);
-								});
+									markCopied(copyKey);
+									setTimeout(() => unmarkCopied(copyKey), 1200);
+								}).catch(() => {});
 							}}
 							className="text-[10px] text-neutral-600 hover:text-neutral-300"
 						>

@@ -1,17 +1,27 @@
 /**
  * Embedded terminal: xterm.js over node-pty, scoped to the session cwd.
- * Terminal colors follow the app theme via the --pi-* CSS variables
- * (getComputedStyle read at mount; remount on theme change re-syncs).
+ * Terminal colors follow the app theme via the --pi-* CSS variables: read at
+ * mount and re-applied to term.options.theme whenever the preset changes
+ * (audit 6 M-21 — the header used to promise a remount that never existed).
  */
 import { useEffect, useRef } from "react";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { useThemeId } from "../../lib/theme-context";
 
 /** Read a --pi-* custom property from the document root. */
 function piVar(name: string, fallback: string): string {
 	const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 	return v.length > 0 ? v : fallback;
+}
+
+function readTerminalTheme(): ITheme {
+	return {
+		background: piVar("--pi-surface", "#111113"),
+		foreground: piVar("--pi-text", "#e5e5e8"),
+		cursor: piVar("--pi-accent", "#5b9bf8"),
+	};
 }
 
 export function TerminalPanel({
@@ -21,6 +31,7 @@ export function TerminalPanel({
 	cwd: string;
 	active: boolean;
 }): React.JSX.Element {
+	const themeId = useThemeId();
 	const containerRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<Terminal | null>(null);
 	const fitRef = useRef<FitAddon | null>(null);
@@ -33,11 +44,7 @@ export function TerminalPanel({
 		const term = new Terminal({
 			fontSize: 11,
 			fontFamily: "SF Mono, Menlo, monospace",
-			theme: {
-				background: piVar("--pi-surface", "#111113"),
-				foreground: piVar("--pi-text", "#e5e5e8"),
-				cursor: piVar("--pi-accent", "#5b9bf8"),
-			},
+			theme: readTerminalTheme(),
 			cursorBlink: true,
 		});
 		const fit = new FitAddon();
@@ -76,6 +83,14 @@ export function TerminalPanel({
 			termRef.current = null;
 		};
 	}, [cwd]);
+
+	// Re-sync xterm's colors when the app preset changes (M-21). The --pi-*
+	// variables are rewritten by applyTheme before this effect runs.
+	useEffect(() => {
+		const term = termRef.current;
+		if (term === null) return;
+		term.options.theme = readTerminalTheme();
+	}, [themeId]);
 
 	// Re-fit when this panel becomes visible: while hidden it measures 0x0, so
 	// fitNow() correctly skipped it and xterm still holds stale dimensions.

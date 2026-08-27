@@ -35,6 +35,7 @@ export function TopBar({
 	onDockToggle,
 	onCompact,
 	onExport,
+	uiScale,
 }: {
 	sidebarHidden: boolean;
 	onToggleSidebar(): void;
@@ -44,6 +45,8 @@ export function TopBar({
 	onDockToggle(tab: Exclude<TopBarDockTab, null>): void;
 	onCompact(): void;
 	onExport(format: "html" | "jsonl"): void;
+	/** Current webFrame zoom factor — traffic-light clearance is physical pixels. */
+	uiScale: number;
 }): React.JSX.Element {
 	const hasSession = activeSessionId !== null;
 
@@ -54,14 +57,18 @@ export function TopBar({
 		>
 			{/* Sidebar toggle: FIXED left position. macOS puts the traffic
 			    lights at x:16 with ~52px total width; we add breathing room so
-			    the toggle does not crowd them (visual gap ≈ 12px). */}
+			    the toggle does not crowd them (visual gap ≈ 12px). The margin
+			    is zoom-compensated (audit 6 L-14): CSS pixels shrink with the
+			    UI scale while the traffic-light cluster stays physical, so a
+			    fixed pixel margin slid under the cluster at 90% scale. */}
 			<button
 				type="button"
 				title={sidebarHidden ? "Show sidebar (⌘\)" : "Hide sidebar (⌘\)"}
 				data-testid="topbar-sidebar-toggle"
 				aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
 				onClick={onToggleSidebar}
-				className={`ml-[84px] rounded p-1.5 transition-colors hover:bg-neutral-800 ${
+				style={{ marginLeft: `${Math.round(84 / uiScale)}px` }}
+				className={`rounded p-1.5 transition-colors hover:bg-neutral-800 ${
 					sidebarHidden ? "text-accent-strong" : "text-neutral-400 hover:text-neutral-200"
 				}`}
 			>

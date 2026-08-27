@@ -10,9 +10,11 @@ import {
 	FolderOpen,
 	GitBranch,
 	ListTodo,
+	ShieldOff,
 	X,
 } from "lucide-react";
 import type { PiImageInput, PiModelInfo, PiThinkingLevel, PermissionMode } from "../../../../shared/pi";
+import { bytesToBase64, isImageAccepted, MAX_IMAGE_BYTES } from "../../lib/attachments";
 import { ModePicker } from "./ModePicker";
 import { ModelPicker } from "./ModelPicker";
 import { ThinkingPicker } from "./ThinkingPicker";
@@ -47,6 +49,7 @@ export function Composer({
 	onPickModel,
 	permissionMode,
 	onPickPermissionMode,
+	permissionGateNote,
 	thinkingLevel,
 	supportedThinkingLevels,
 	onPickThinkingLevel,
@@ -71,6 +74,12 @@ export function Composer({
 	/** Agent autonomy mode; omit to hide the picker. */
 	permissionMode?: PermissionMode | undefined;
 	onPickPermissionMode?(mode: PermissionMode): void;
+	/**
+	 * Set when the permission picker is hidden because the session backend has
+	 * no gate (RPC, audit 6 H-3): renders a passive annotation chip with this
+	 * explanation as its tooltip, in place of the interactive picker.
+	 */
+	permissionGateNote?: string | undefined;
 	/** Reasoning-effort selector; omit to hide the control entirely. */
 	thinkingLevel?: PiThinkingLevel | undefined;
 	supportedThinkingLevels?: PiThinkingLevel[] | undefined;
@@ -78,6 +87,8 @@ export function Composer({
 }): React.JSX.Element {
 	const [text, setText] = useState("");
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
+	/** Names of files refused by the image size cap (audit 6 M-19). */
+	const [rejected, setRejected] = useState<string[]>([]);
 	const [followUpMode, setFollowUpMode] = useState(false);
 	const [dragging, setDragging] = useState(false);
 	const [git, setGit] = useState<{
@@ -141,14 +152,13 @@ export function Composer({
 
 	const TEXT_EXTENSIONS = new Set(["ts","js","py","md","json","txt","css","html","yaml","yml","toml","sh","rs","go","java","rb","sql","xml","csv"]);
 
-	async function fileToAttachment(file: File): Promise<Attachment> {
+	/** Returns null for files the cap rejects (oversized images, M-19). */
+	async function fileToAttachment(file: File): Promise<Attachment | null> {
 		const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 		if (file.type.startsWith("image/")) {
+			if (!isImageAccepted(file.size)) return null;
 			const buffer = await file.arrayBuffer();
-			let binary = "";
-			const bytes = new Uint8Array(buffer);
-			for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i] ?? 0);
-			return { id, name: file.name, size: file.size, kind: "image", imageData: btoa(binary), mimeType: file.type };
+			return { id, name: file.name, size: file.size, kind: "image", imageData: bytesToBase64(new Uint8Array(buffer)), mimeType: file.type };
 		}
 		const ext = file.name.split(".").pop() ?? "";
 		if (TEXT_EXTENSIONS.has(ext) && file.size <= 100_000) {
@@ -167,12 +177,16 @@ export function Composer({
 		};
 	}
 
-	async function filesToAttachments(files: FileList): Promise<Attachment[]> {
-		const out: Attachment[] = [];
+	async function addFiles(files: FileList): Promise<void> {
+		const accepted: Attachment[] = [];
+		const refused: string[] = [];
 		for (const file of Array.from(files)) {
-			out.push(await fileToAttachment(file));
+			const att = await fileToAttachment(file);
+			if (att === null) refused.push(file.name);
+			else accepted.push(att);
 		}
-		return out;
+		setRejected(refused);
+		if (accepted.length > 0) setAttachments((prev) => [...prev, ...accepted]);
 	}
 
 	function submit(): void {
@@ -216,9 +230,7 @@ export function Composer({
 				e.preventDefault();
 				setDragging(false);
 				if (e.dataTransfer.files.length > 0) {
-					void filesToAttachments(e.dataTransfer.files).then((atts) =>
-						setAttachments((prev) => [...prev, ...atts])
-					);
+					void addFiles(e.dataTransfer.files).catch(() => {});
 				}
 			}}
 		>
@@ -309,9 +321,7 @@ export function Composer({
 						const files = e.clipboardData.files;
 						if (files.length > 0) {
 							e.preventDefault();
-							void filesToAttachments(files).then((atts) =>
-								setAttachments((prev) => [...prev, ...atts])
-							);
+							void addFiles(files).catch(() => {});
 						}
 					}}
 					placeholder={
@@ -355,6 +365,26 @@ export function Composer({
 					</div>
 				)}
 
+				{rejected.length > 0 && (
+					<div
+						className="flex items-center gap-2 px-4 pb-1.5 text-[10px] text-amber-500"
+						data-testid="attachment-rejected"
+					>
+						<span className="flex-1">
+							Skipped {rejected.join(", ")} — images are limited to{" "}
+							{Math.round(MAX_IMAGE_BYTES / 1_048_576)} MB.
+						</span>
+						<button
+							type="button"
+							onClick={() => setRejected([])}
+							className="flex items-center text-neutral-500 hover:text-neutral-300"
+							aria-label="Dismiss attachment warning"
+						>
+							<X size={10} strokeWidth={2} />
+						</button>
+					</div>
+				)}
+
 				{/* Bottom control row */}
 				<div className="flex items-center gap-2 px-3 pb-2.5 pt-1">
 					{streaming ? (
@@ -393,11 +423,22 @@ export function Composer({
 						</>
 					) : (
 						<>
-							{permissionMode !== undefined && (
+							{permissionMode !== undefined ? (
 								<ModePicker
 									mode={permissionMode}
 									onPick={(m) => onPickPermissionMode?.(m)}
 								/>
+							) : (
+								permissionGateNote !== undefined && (
+									<span
+										data-testid="permission-gate-note"
+										className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] text-amber-500"
+										title={permissionGateNote}
+									>
+										<ShieldOff size={11} strokeWidth={2} />
+										Ungated (RPC)
+									</span>
+								)
 							)}
 							{projectName !== undefined && (
 								<span

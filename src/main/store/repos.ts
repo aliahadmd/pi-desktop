@@ -107,6 +107,12 @@ export class SessionsRepo {
 			| undefined;
 	}
 
+	getByFilePath(filePath: string): SessionRow | undefined {
+		return this.db.prepare("SELECT * FROM sessions WHERE file_path = ?").get(filePath) as
+			| SessionRow
+			| undefined;
+	}
+
 	list(limit = 500): SessionRow[] {
 		return this.db
 			.prepare("SELECT * FROM sessions ORDER BY COALESCE(updated_at, created_at) DESC LIMIT ?")
@@ -216,6 +222,19 @@ export class UsageRepo {
 				e.costUsd ?? 0,
 				sessionId
 			);
+	}
+
+	/**
+	 * Insert an event and roll it into the session totals in one transaction
+	 * (audit 6 L-10): a failed rollup after a committed insert would leave
+	 * usage_events and the sessions rollup columns permanently desynchronized,
+	 * and they back different UI surfaces.
+	 */
+	insertWithRollup(e: UsageEventInsert): void {
+		this.db.transaction(() => {
+			this.insert(e);
+			this.addToSessionRollup(e.sessionId, e);
+		})();
 	}
 
 	dailySummary(days: number): UsageSummaryRow[] {

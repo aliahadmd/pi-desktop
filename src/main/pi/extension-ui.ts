@@ -12,9 +12,17 @@ import type { PiEvent, UiDialogRequest, UiDialogResponse } from "../../shared/pi
 type DialogAnswer = string | undefined | boolean;
 type DialogMethod = "select" | "confirm" | "input" | "editor";
 
+/**
+ * Default timeout for blocking dialogs (audit 6 M-1): a dialog the user never
+ * answers must not park the agent forever. Matches AuthService's 5-minute
+ * login prompt timeout.
+ */
+const DEFAULT_DIALOG_TIMEOUT_MS = 5 * 60_000;
+
 interface PendingDialog {
 	method: DialogMethod;
-	resolve(answer: DialogAnswer): void;
+	/** Idempotent settlement: clears timer/abort listener, removes the entry. */
+	settle(answer: DialogAnswer): void;
 	timer: NodeJS.Timeout | undefined;
 }
 
@@ -33,14 +41,12 @@ export class SdkExtensionUiAdapter {
 	respond(response: UiDialogResponse): void {
 		const pending = this.pending.get(response.requestId);
 		if (pending === undefined) return;
-		if (pending.timer !== undefined) clearTimeout(pending.timer);
-		this.pending.delete(response.requestId);
 		if (response.cancelled === true) {
-			pending.resolve(pending.method === "confirm" ? false : undefined);
+			pending.settle(pending.method === "confirm" ? false : undefined);
 		} else if (pending.method === "confirm") {
-			pending.resolve(response.confirmed === true);
+			pending.settle(response.confirmed === true);
 		} else {
-			pending.resolve(response.value ?? undefined);
+			pending.settle(response.value ?? undefined);
 		}
 	}
 
@@ -52,21 +58,25 @@ export class SdkExtensionUiAdapter {
 			select(title, options, opts) {
 				return adapter.openDialog(
 					{ method: "select", title, options },
-					opts?.timeout
+					opts?.timeout,
+					opts?.signal
 				) as Promise<string | undefined>;
 			},
 			confirm(title, message, opts) {
 				return adapter.openDialog(
 					{ method: "confirm", title, message },
-					opts?.timeout
+					opts?.timeout,
+					opts?.signal
 				) as Promise<boolean>;
 			},
-			input(title, placeholder) {
+			// input() previously dropped its opts entirely (audit 6 L-5).
+			input(title, placeholder, opts) {
 				return adapter.openDialog(
 					placeholder === undefined
 						? { method: "input", title }
 						: { method: "input", title, placeholder },
-					undefined
+					opts?.timeout,
+					opts?.signal
 				) as Promise<string | undefined>;
 			},
 			editor(title, prefill) {
@@ -141,26 +151,75 @@ export class SdkExtensionUiAdapter {
 		return ctx;
 	}
 
-	/** Open a dialog: assign an id, emit to renderer, wait for respond()/timeout. */
+	/** Open a dialog: assign an id, emit to renderer, wait for respond()/timeout/signal. */
 	private openDialog(
 		request: DistributiveOmit<UiDialogRequest, "requestId">,
-		timeoutMs: number | undefined
+		timeoutMs: number | undefined,
+		signal?: AbortSignal
 	): Promise<DialogAnswer> {
 		return new Promise((resolve) => {
 			const requestId = `ui_${++this.nextId}`;
+			const effectiveTimeout = timeoutMs ?? DEFAULT_DIALOG_TIMEOUT_MS;
+			const cancelAnswer: DialogAnswer = request.method === "confirm" ? false : undefined;
+			let onAbort: (() => void) | undefined;
 			const pending: PendingDialog = {
 				method: request.method,
-				resolve,
-				timer:
-					timeoutMs === undefined
-						? undefined
-						: setTimeout(() => {
-								this.pending.delete(requestId);
-								resolve(request.method === "confirm" ? false : undefined);
-							}, timeoutMs),
+				timer: undefined,
+				settle: (answer) => {
+					if (this.pending.get(requestId) !== pending) return; // already settled
+					if (pending.timer !== undefined) clearTimeout(pending.timer);
+					if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
+					this.pending.delete(requestId);
+					resolve(answer);
+				},
 			};
+			pending.timer = setTimeout(() => pending.settle(cancelAnswer), effectiveTimeout);
 			this.pending.set(requestId, pending);
-			this.onEvent({ type: "ui_dialog", request: { ...request, requestId } as UiDialogRequest });
+			// opts.signal (audit 6 L-5): programmatic dismissal resolves fail-closed,
+			// the same as a user cancel or timeout.
+			if (signal !== undefined) {
+				if (signal.aborted) {
+					pending.settle(cancelAnswer);
+					return;
+				}
+				onAbort = () => pending.settle(cancelAnswer);
+				signal.addEventListener("abort", onAbort, { once: true });
+			}
+			// Ship the effective deadline with the request so the renderer can
+			// show it and dismiss in step with the timer above — a dialog that
+			// already timed out main-side must not linger as a dead modal.
+			this.onEvent({
+				type: "ui_dialog",
+				request: { ...request, requestId, timeoutMs: effectiveTimeout } as UiDialogRequest,
+			});
 		});
+	}
+
+	/**
+	 * Settle every pending dialog as cancelled (backend dispose / session
+	 * replacement) so a gated tool call is never parked on a dead session.
+	 */
+	cancelAll(): void {
+		for (const pending of [...this.pending.values()]) {
+			pending.settle(pending.method === "confirm" ? false : undefined);
+		}
+	}
+
+	/**
+	 * Ask the user whether a project's local .pi resources may load (audit 6
+	 * C-1). Used for in-place session rebuilds (switch) where the renderer
+	 * already knows the session and can serve the dialog. Fails closed on
+	 * timeout/cancel.
+	 */
+	async confirmProjectTrust(cwd: string): Promise<boolean> {
+		const answer = await this.openDialog(
+			{
+				method: "select",
+				title: `Load project resources from ${cwd}/.pi? Only trust projects whose code you are willing to run.`,
+				options: ["Trust project", "Stay untrusted"],
+			},
+			DEFAULT_DIALOG_TIMEOUT_MS
+		);
+		return answer === "Trust project";
 	}
 }

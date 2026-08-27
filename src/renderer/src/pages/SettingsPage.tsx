@@ -9,7 +9,7 @@
  *   Sound     — sound effects toggle
  *   Packages  — package marketplace / installed skills
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	piThinkingLevels,
 	permissionModes,
@@ -71,10 +71,27 @@ export function SettingsPage({
 	const [saving, setSaving] = useState(false);
 	const [saved, setSaved] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	/**
+	 * Settings keys with an uncommitted local edit (text inputs save onBlur).
+	 * A save-triggered reload must not clobber them (audit 6 L-1): blurring
+	 * field B used to replace the whole settings object mid-edit on field A.
+	 */
+	const dirtyKeys = useRef<Set<string>>(new Set());
 
 	const load = useCallback(async (): Promise<void> => {
 		const result = await window.piDesktop.invoke({ type: "pi.settings.get" });
-		if (result.ok) setSettings(result.data as PiSettings);
+		if (result.ok) {
+			const fresh = result.data as PiSettings;
+			// Merge the reload into untouched keys only; dirty keys keep the
+			// in-progress local value.
+			setSettings((prev) => {
+				const merged: PiSettings = { ...fresh };
+				for (const key of dirtyKeys.current) {
+					if (key in prev) merged[key] = prev[key];
+				}
+				return merged;
+			});
+		}
 	}, []);
 
 	useEffect(() => {
@@ -94,6 +111,8 @@ export function SettingsPage({
 				setError(r.error.message);
 				return;
 			}
+			// Committed — the reloaded value now matches the local one.
+			dirtyKeys.current.delete(key);
 			setSaved(true);
 			await load();
 			setTimeout(() => setSaved(false), 2000);
@@ -141,6 +160,7 @@ export function SettingsPage({
 							saved={saved}
 							saving={saving}
 							onSave={save}
+							onDirtyKey={(key) => dirtyKeys.current.add(key)}
 						/>
 					)}
 					{section === "appearance" && (
@@ -178,6 +198,7 @@ function GeneralSection({
 	saved,
 	saving,
 	onSave,
+	onDirtyKey,
 }: {
 	settings: PiSettings;
 	setSettings(updater: (prev: PiSettings) => PiSettings): void;
@@ -185,6 +206,8 @@ function GeneralSection({
 	saved: boolean;
 	saving: boolean;
 	onSave(key: string, value: unknown): Promise<void>;
+	/** Marks a settings key as holding an uncommitted edit (reload must keep it). */
+	onDirtyKey(key: string): void;
 }): React.JSX.Element {
 	return (
 		<div>
@@ -206,7 +229,10 @@ function GeneralSection({
 				<SettingRow label="Default provider" hint="Used when no model is restored from a session">
 					<input
 						value={settings.defaultProvider ?? ""}
-						onChange={(e) => setSettings((s) => ({ ...s, defaultProvider: e.target.value }))}
+						onChange={(e) => {
+							onDirtyKey("defaultProvider");
+							setSettings((s) => ({ ...s, defaultProvider: e.target.value }));
+						}}
 						onBlur={(e) => void onSave("defaultProvider", e.target.value)}
 						placeholder="anthropic"
 						className="w-48 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs outline-none focus:border-blue-500"
@@ -216,7 +242,10 @@ function GeneralSection({
 				<SettingRow label="Default model" hint="Model id, e.g. claude-sonnet-4-5">
 					<input
 						value={settings.defaultModel ?? ""}
-						onChange={(e) => setSettings((s) => ({ ...s, defaultModel: e.target.value }))}
+						onChange={(e) => {
+							onDirtyKey("defaultModel");
+							setSettings((s) => ({ ...s, defaultModel: e.target.value }));
+						}}
 						onBlur={(e) => void onSave("defaultModel", e.target.value)}
 						placeholder="model id"
 						className="w-48 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs outline-none focus:border-blue-500"
@@ -433,9 +462,12 @@ function Toggle({
 			onClick={() => onChange(!checked)}
 			className={`h-5 w-9 rounded-full transition ${checked ? "bg-blue-600" : "bg-neutral-700"}`}
 		>
+			{/* Knob travel = track (36px) − knob (16px) − 2px inset = ml-[18px].
+			    The old "translate-x-4.5 ml-4" stacked both offsets and pushed the
+			    knob past the track's right edge (audit 6 L-14). */}
 			<span
 				className={`block h-4 w-4 rounded-full bg-white transition ${
-					checked ? "translate-x-4.5 ml-4" : "ml-0.5"
+					checked ? "ml-[18px]" : "ml-0.5"
 				}`}
 			/>
 		</button>

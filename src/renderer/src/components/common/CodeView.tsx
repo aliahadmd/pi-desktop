@@ -14,7 +14,7 @@
  */
 import Ansi from "ansi-to-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { ensureLanguage, highlight, langFor } from "../../lib/highlight";
+import { ensureLanguage, highlightCached, langFor } from "../../lib/highlight";
 import { useThemeId } from "../../lib/theme-context";
 import { shikiThemeFor } from "../../../../shared/theme";
 
@@ -49,7 +49,9 @@ export function CodeView({
 		if (id === "text") return;
 		void (async () => {
 			if (!(await ensureLanguage(id))) return;
-			const out = await highlight(text, id, shikiThemeFor(themeId));
+			// Cached: virtualized rows remount on every scroll-through, and each
+			// remount used to re-run shiki over identical source (audit 6 L-12).
+			const out = await highlightCached(text, id, shikiThemeFor(themeId));
 			if (!cancelled) setHtml(out);
 		})().catch((err: unknown) => {
 			// Never swallow silently: a bad theme/grammar id degrades to plain

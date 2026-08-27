@@ -27,10 +27,21 @@ interface ToolCallLike {
 /** Tools that never require approval in any mode — research must stay free. */
 const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls"]);
 
-function summarize(event: ToolCallLike): string {
+interface ToolCallSummary {
+	/** Short human-readable form for the dialog title (truncated). */
+	display: string;
+	/**
+	 * Full-length identity for the "always allow" memory (audit 6 L-6): keying
+	 * on the truncated display made two commands sharing a prefix collide
+	 * fail-open.
+	 */
+	key: string;
+}
+
+function summarize(event: ToolCallLike): ToolCallSummary {
 	const input = event.input ?? {};
 	if (event.toolName === "bash" && typeof input.command === "string") {
-		return `$ ${input.command.slice(0, 400)}`;
+		return { display: `$ ${input.command.slice(0, 200)}`, key: `bash:${input.command}` };
 	}
 	const filePath =
 		typeof input.path === "string"
@@ -38,7 +49,7 @@ function summarize(event: ToolCallLike): string {
 			: typeof input.file_path === "string"
 				? input.file_path
 				: "(unknown file)";
-	return `${event.toolName}: ${filePath}`;
+	return { display: `${event.toolName}: ${filePath}`, key: `${event.toolName}:${filePath}` };
 }
 
 /** Does this mode require approval for this tool? */
@@ -68,7 +79,14 @@ export const createPermissionExtension = (
 	const alwaysAllowed = new Map<string, Set<string>>();
 
 	return ((pi: ExtensionAPI) => {
-		pi.on("session_shutdown", () => {
+		pi.on("session_shutdown", (event) => {
+			// session_shutdown also fires on in-place session replacement
+			// (reason "new" | "resume" | "fork" | "reload") — the app-session id
+			// survives those, so wiping state here would silently reset the user's
+			// permission mode mid-tab while the composer chip still shows it
+			// (audit 6 H-2). Only a real close ("quit") tears down; the mode is
+			// also cleared by PiService.closeSession on tab close.
+			if (event.reason !== "quit") return;
 			const sessionId = getAppSessionId();
 			if (sessionId !== null) {
 				clearSession(sessionId);
@@ -83,21 +101,24 @@ export const createPermissionExtension = (
 
 			const summary = summarize(event as ToolCallLike);
 			let allowedSet = alwaysAllowed.get(sessionId);
-			if (allowedSet?.has(summary) === true) return; // previously always-allowed
+			if (allowedSet?.has(summary.key) === true) return; // previously always-allowed
 
 			if (!isGated(event.toolName, mode)) return;
 
+			// The summary rides in the title, not as option[0] (audit 6 L-6): when
+			// the command itself was the first option, picking the highlighted
+			// default *denied* the call. Options are now actions only.
 			const choice = await ctx.ui.select(
 				mode === "plan"
-					? "Plan mode — allow this call anyway?"
-					: `Allow ${event.toolName}?`,
-				[summary, "Allow once", "Always allow this command", "Deny"],
+					? `Plan mode — allow this call anyway? ${summary.display}`
+					: `Allow ${event.toolName}? ${summary.display}`,
+				["Allow once", "Always allow this command", "Deny"],
 			);
 
 			if (choice === "Always allow this command") {
 				allowedSet ??= new Set();
 				alwaysAllowed.set(sessionId, allowedSet);
-				allowedSet.add(summary);
+				allowedSet.add(summary.key);
 				return;
 			}
 			if (choice === "Allow once") return;

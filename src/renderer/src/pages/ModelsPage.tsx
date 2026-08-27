@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import type { ModelCatalogEntry, ProviderAuthInfo } from "../../../shared/pi";
+import { mergeLlamaCppPreset } from "../lib/llama-preset";
 
 const SUBSCRIPTION_COPY: Record<string, string> = {
 	"claude-pro-max":
@@ -78,8 +79,16 @@ export function ModelsPage({
 
 	async function removeKey(providerId: string): Promise<void> {
 		setBusy(true);
+		setError(null);
+		setNotice(null);
 		try {
-			await window.piDesktop.invoke({ type: "auth.remove_key", providerId });
+			// The envelope must be checked — a failed remove used to print the
+			// same "removed" notice as a success (audit 6 M-25).
+			const result = await window.piDesktop.invoke({ type: "auth.remove_key", providerId });
+			if (!result.ok) {
+				setError(result.error.message);
+				return;
+			}
 			setNotice(`API key removed for ${providerId}.`);
 			await loadProviders();
 		} finally {
@@ -106,8 +115,13 @@ export function ModelsPage({
 
 	async function logout(providerId: string): Promise<void> {
 		setBusy(true);
+		setError(null);
 		try {
-			await window.piDesktop.invoke({ type: "auth.logout", providerId });
+			const result = await window.piDesktop.invoke({ type: "auth.logout", providerId });
+			if (!result.ok) {
+				setError(result.error.message);
+				return;
+			}
 			await loadProviders();
 		} finally {
 			setBusy(false);
@@ -255,26 +269,15 @@ export function ModelsPage({
 									<button
 										type="button"
 										onClick={() => {
-											const preset = {
-												providers: {
-													llamacpp: {
-														baseUrl: "http://127.0.0.1:8080/v1",
-														api: "openai-completions",
-														apiKey: "llama",
-														compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
-														models: [{ id: "local-model" }],
-													},
-												},
-											};
-											setModelsJson(
-												JSON.stringify(
-													modelsJson !== null
-														? { ...JSON.parse(modelsJson), ...preset }
-														: preset,
-													null,
-													2
-												)
-											);
+											// Deep-merge into the current document (audit 6 L-11):
+											// existing providers survive, and invalid JSON in the
+											// textarea is reported instead of thrown uncaught.
+											const merged = mergeLlamaCppPreset(modelsJson);
+											if (!merged.ok) {
+												setError(merged.error);
+												return;
+											}
+											setModelsJson(merged.json);
 											setShowModelsJson(true);
 										}}
 										className="rounded bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
@@ -311,8 +314,13 @@ export function ModelsPage({
 														.then((r) => {
 															if (!r.ok) setError(r.error.message);
 															else {
-																setNotice("models.json saved. Restart sessions to pick up changes.");
+																// Main refreshes the live ModelRuntime on save
+																// (audit 6 L-11); reload the page's lists so the
+																// catalog edit is visible without a sheet reopen.
+																setNotice("models.json saved — new sessions pick up the change immediately.");
 																setShowModelsJson(false);
+																void loadProviders();
+																void loadModels(null);
 															}
 														})
 														.finally(() => setJsonSaving(false));
@@ -322,7 +330,7 @@ export function ModelsPage({
 												Save models.json
 											</button>
 											<span className="text-[10px] text-neutral-600">
-												Writes ~/.pi/agent/models.json. Restart sessions to apply.
+												Writes ~/.pi/agent/models.json. Open sessions keep their current model.
 											</span>
 										</div>
 									</div>

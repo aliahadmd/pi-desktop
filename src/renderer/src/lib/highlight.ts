@@ -5,6 +5,7 @@
  * `loadLanguage` pulls any other bundled grammar when a file needs it.
  */
 import type { Highlighter, BundledLanguage } from "shiki";
+import { PromiseLruCache } from "./promise-lru";
 
 let shikiHighlighter: Promise<Highlighter> | null = null;
 
@@ -196,4 +197,21 @@ export async function highlight(
 	// properties that need extra CSS to become real colors — without it every
 	// token inherited one flat color and code looked unhighlighted.
 	return h.codeToHtml(code, { lang, theme: shikiTheme });
+}
+
+/**
+ * Cached highlight for mount-heavy surfaces (CodeView rows remount on every
+ * virtualization pass). Keyed by full content + lang + theme; bounded so a
+ * long session can't grow it without limit (audit 6 L-12).
+ */
+const htmlCache = new PromiseLruCache<string>(200);
+
+export function highlightCached(
+	code: string,
+	lang: BundledLanguage | "text",
+	shikiTheme: string,
+): Promise<string> {
+	return htmlCache.getOrCompute(`${shikiTheme} ${lang} ${code}`, () =>
+		highlight(code, lang, shikiTheme)
+	);
 }

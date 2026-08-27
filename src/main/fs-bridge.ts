@@ -120,13 +120,24 @@ export class FileBridge {
 
 	async readFile(filePath: string): Promise<{ content: string; truncated: boolean }> {
 		const scoped = await this.assertRealScoped(filePath);
-		const stat = await fs.stat(scoped);
-		if (!stat.isFile()) throw new Error(`not a file: ${filePath}`);
-		const content = await fs.readFile(scoped, { encoding: "utf8", flag: "r" });
-		return {
-			content: content.slice(0, MAX_READ_BYTES),
-			truncated: stat.size > MAX_READ_BYTES,
-		};
+		// Bounded read (audit 6 L-7): read at most cap+1 bytes instead of the
+		// whole file — a multi-GB log in a project root used to be pulled fully
+		// into memory and stalled the main process on a single click. The cap is
+		// in BYTES now (the old code sliced a fully-read string by UTF-16 code
+		// units, so a multibyte file could return several megabytes).
+		const handle = await fs.open(scoped, "r");
+		try {
+			const stat = await handle.stat();
+			if (!stat.isFile()) throw new Error(`not a file: ${filePath}`);
+			const buffer = Buffer.alloc(MAX_READ_BYTES + 1);
+			const { bytesRead } = await handle.read(buffer, 0, MAX_READ_BYTES + 1, 0);
+			return {
+				content: buffer.subarray(0, Math.min(bytesRead, MAX_READ_BYTES)).toString("utf8"),
+				truncated: stat.size > MAX_READ_BYTES,
+			};
+		} finally {
+			await handle.close();
+		}
 	}
 
 	/**

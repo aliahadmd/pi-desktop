@@ -16,6 +16,7 @@ import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
 import type { ModelCatalogEntry, ProviderAuthInfo } from "../../shared/pi";
 import { toJson } from "../../shared/pi";
 import { describeError } from "./backend";
+import { appRoot } from "./app-root";
 import type { IpcRouter } from "../ipc/router";
 import type { RendererEventBus } from "../ipc/events";
 
@@ -58,7 +59,9 @@ export class AuthService {
 
 	async start(): Promise<void> {
 		this.runtime = await ModelRuntime.create({ allowModelNetwork: true, modelRefreshTimeoutMs: 15_000 });
-		this.settingsManager = SettingsManager.create(process.cwd(), getAgentDir());
+		// Root at the app dir, not the launch directory (audit 6 H-4): in a
+		// packaged app process.cwd() is wherever the user launched from.
+		this.settingsManager = SettingsManager.create(appRoot(), getAgentDir());
 		await this.applyStoredKeys();
 	}
 
@@ -120,7 +123,7 @@ export class AuthService {
 			}
 			return toJson(content);
 		});
-		router.handle("models.json.save", (req) => {
+		router.handle("models.json.save", async (req) => {
 			const parsed: unknown = JSON.parse(req.content);
 			// Shape validation before overwriting pi's file.
 			if (
@@ -157,6 +160,15 @@ export class AuthService {
 			const tmp = target + ".tmp";
 			writeFileSync(tmp, JSON.stringify(parsed, null, 2) + "\n", "utf8");
 			renameSync(tmp, target);
+			// Audit 6 L-11: apply the edit to the LIVE runtime — refresh() re-reads
+			// models.json (ModelConfig.load) without a network round-trip, so new
+			// sessions see the catalog change immediately. The file is already
+			// saved, so a refresh failure is reported but must not fail the write.
+			try {
+				await this.runtime?.refresh({ allowNetwork: false });
+			} catch (error) {
+				this.log("warn", `model catalog refresh after models.json save failed: ${describeError(error)}`);
+			}
 			return null;
 		});
 		router.handle("session.scoped_models.get", () => {
@@ -174,12 +186,18 @@ export class AuthService {
 			return null;
 		});
 		router.handle("packages.search", async (req) => {
-			void req.query;
 			try {
 				const { execFile } = await import("node:child_process");
 				const { promisify } = await import("node:util");
 				const exec = promisify(execFile);
-				const raw = await exec("npm", ["search", "pi-package", "--json"], {
+				// The optional query narrows the npm search (audit 6 L-3 — it used
+				// to be accepted and explicitly discarded). Arg array, no shell, so
+				// the terms cannot inject. The marketplace filters the full
+				// catalog client-side and sends no query.
+				const terms = ["pi-package"];
+				const query = req.query?.trim();
+				if (query !== undefined && query.length > 0) terms.push(query);
+				const raw = await exec("npm", ["search", ...terms, "--json"], {
 					timeout: 15_000,
 					maxBuffer: 1024 * 1024,
 				});
@@ -455,7 +473,7 @@ export class AuthService {
 		const { DefaultPackageManager } =
 			require("@earendil-works/pi-coding-agent") as typeof import("@earendil-works/pi-coding-agent");
 		return new DefaultPackageManager({
-			cwd: process.cwd(),
+			cwd: appRoot(), // not the launch directory (audit 6 H-4)
 			agentDir: getAgentDir(),
 			settingsManager: this.settingsManager,
 		});

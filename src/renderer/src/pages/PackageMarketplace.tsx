@@ -38,6 +38,8 @@ export function PackageMarketplace(): React.JSX.Element {
 	const [filter, setFilter] = useState("");
 	const [searching, setSearching] = useState(true);
 	const [installing, setInstalling] = useState<string | null>(null);
+	/** Non-null: the trust interstitial is up for this package (audit 6 M-24). */
+	const [pendingInstall, setPendingInstall] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -75,7 +77,12 @@ export function PackageMarketplace(): React.JSX.Element {
 		map.set(key, val);
 	}
 
-	async function install(name: string): Promise<void> {
+	// Marketplace installs go through the SAME trust interstitial as
+	// PackagesPanel (audit 6 M-24): a pi package is arbitrary code execution,
+	// so one-click install from a browse surface was the wrong default.
+	async function confirmInstall(): Promise<void> {
+		if (pendingInstall === null) return;
+		const name = pendingInstall;
 		setInstalling(name);
 		setError(null);
 		setMessage(null);
@@ -92,15 +99,24 @@ export function PackageMarketplace(): React.JSX.Element {
 			}
 		} finally {
 			setInstalling(null);
+			setPendingInstall(null);
 		}
 	}
 
-	async function remove(name: string): Promise<void> {
-		setInstalling(name);
+	/** Takes the FULL source ("npm:<name>") — never re-prefix it (audit 6 M-23). */
+	async function remove(source: string): Promise<void> {
+		setInstalling(source);
+		setError(null);
+		setMessage(null);
 		try {
-			await window.piDesktop.invoke({ type: "packages.remove", source: `npm:${name}` });
-			setMessage(`Removed ${name}.`);
-			await load();
+			const result = await window.piDesktop.invoke({ type: "packages.remove", source });
+			// The envelope must be checked: "Removed" on a failed call was a lie.
+			if (result.ok) {
+				setMessage(`Removed ${source.replace(/^npm:/, "")}.`);
+				await load();
+			} else {
+				setError(`Remove failed: ${result.error.message}`);
+			}
 		} finally {
 			setInstalling(null);
 		}
@@ -132,6 +148,37 @@ export function PackageMarketplace(): React.JSX.Element {
 					placeholder="Search packages…"
 					className="mt-5 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
 				/>
+
+				{/* Trust interstitial (M-24): same gate PackagesPanel enforces. */}
+				{pendingInstall !== null && (
+					<div
+						className="mt-4 rounded border border-amber-900 bg-amber-950/40 p-3"
+						data-testid="marketplace-trust-interstitial"
+					>
+						<div className="text-xs font-medium text-amber-200">Trust this package?</div>
+						<p className="mt-1 font-mono text-[10px] text-neutral-300">npm:{pendingInstall}</p>
+						<p className="mt-1 text-[10px] text-neutral-400">
+							Packages execute arbitrary code and can instruct the model to run anything.
+						</p>
+						<div className="mt-2 flex gap-2">
+							<button
+								type="button"
+								disabled={installing !== null}
+								onClick={() => void confirmInstall()}
+								className="rounded bg-blue-600 px-3 py-1 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
+							>
+								{installing !== null ? "Installing…" : "Trust & install"}
+							</button>
+							<button
+								type="button"
+								onClick={() => setPendingInstall(null)}
+								className="rounded bg-neutral-800 px-3 py-1 text-xs text-neutral-300 hover:bg-neutral-700"
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
+				)}
 
 				{/* Installed */}
 				{installed.length > 0 && (
@@ -192,8 +239,8 @@ export function PackageMarketplace(): React.JSX.Element {
 											{isInstalled ? (
 												<button
 													type="button"
-													disabled={installing === pkg.name}
-													onClick={() => void remove(pkg.name)}
+													disabled={installing === `npm:${pkg.name}`}
+													onClick={() => void remove(`npm:${pkg.name}`)}
 													className="shrink-0 rounded bg-neutral-800 px-3 py-1 text-xs text-neutral-400 hover:bg-danger-soft hover:text-danger disabled:opacity-40"
 												>
 													Remove
@@ -202,10 +249,10 @@ export function PackageMarketplace(): React.JSX.Element {
 												<button
 													type="button"
 													disabled={installing === pkg.name}
-													onClick={() => void install(pkg.name)}
+													onClick={() => setPendingInstall(pkg.name)}
 													className="shrink-0 rounded bg-blue-600 px-3 py-1 text-xs text-on-accent hover:bg-blue-500 disabled:opacity-40"
 												>
-													{installing === pkg.name ? "…" : "Install"}
+													Install…
 												</button>
 											)}
 										</div>

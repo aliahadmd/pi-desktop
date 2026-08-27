@@ -3,9 +3,12 @@
  */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
+	ArrowLeft,
 	Check,
 	ChevronDown,
 	ChevronRight,
+	Dot,
+	GitFork,
 	Save,
 	SquareArrowOutUpRight,
 	X,
@@ -13,6 +16,7 @@ import {
 import { Markdown } from "../chat/Markdown";
 import { AutoOutput } from "../common/CodeView";
 import { useSessions } from "../../stores/pi-sessions";
+import { confirmDockEditorClose, useDockDirty } from "../../stores/dock-dirty";
 import { parseArgumentHintFromHint } from "../../lib/command-hints";
 
 /**
@@ -91,7 +95,7 @@ function ExplorerRow({
 						type="button"
 						title="Open in editor"
 						onClick={() => onOpenInEditor(full)}
-						className="mr-2 hidden shrink-0 rounded px-1 text-neutral-600 hover:text-neutral-200 group-hover:block"
+						className="mr-2 hidden shrink-0 rounded px-1 text-neutral-600 hover:text-neutral-200 group-hover:block group-focus-within:block"
 					>
 						<SquareArrowOutUpRight size={10} strokeWidth={2} />
 					</button>
@@ -111,6 +115,19 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 	const [error, setError] = useState<string | null>(null);
 	const cacheRef = useRef<ListingCache>(makeCache());
 	const activeSessionId = useSessions((s) => s.activeId);
+
+	// Publish dirty state so dock-close / session-switch call sites can confirm
+	// before destroying the buffer (audit 6 M-22). A ref mirrors it for the
+	// cwd effect, which must read the draft without re-running on every edit.
+	const dirtyRef = useRef<string | null>(null);
+	useEffect(() => {
+		const dirty = draft !== null && fileContent !== null ? fileContent.path : null;
+		dirtyRef.current = dirty;
+		useDockDirty.getState().setDirty(dirty);
+	}, [draft, fileContent]);
+	useEffect(() => {
+		return () => useDockDirty.getState().setDirty(null);
+	}, []);
 
 	const loadDir = useCallback(
 		async (dir: string): Promise<void> => {
@@ -133,7 +150,18 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 
 	useEffect(() => {
 		setExpandedDirs(new Set());
-		setFileContent(null);
+		// Session switch: the editor's file belongs to the previous root. Never
+		// discard a dirty buffer silently (M-22) — on a declined confirm the
+		// editor stays open on the old file so the user can still save or close.
+		if (dirtyRef.current !== null && confirmDockEditorClose()) {
+			setFileContent(null);
+			setDraft(null);
+			setTruncated(false);
+		} else if (dirtyRef.current === null) {
+			setFileContent(null);
+			setDraft(null);
+			setTruncated(false);
+		}
 		void loadDir(cwd);
 	}, [cwd, loadDir]);
 
@@ -150,6 +178,9 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 	}
 
 	async function openFile(full: string): Promise<void> {
+		// Opening (or re-clicking) a file replaces the CodeMirror document and
+		// wipes its undo history — confirm first when a draft exists (M-22).
+		if (draft !== null && !confirmDockEditorClose()) return;
 		const result = await window.piDesktop.invoke({ type: "fs.read", filePath: full });
 		if (result.ok) {
 			setFileContent({ path: full, content: result.data.content });
@@ -201,7 +232,8 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 			.invoke({ type: "workspace.open_in_editor", path })
 			.then((r) => {
 				if (!r.ok) setError(r.error.message);
-			});
+			})
+			.catch(() => {});
 	}
 
 	function renderDir(dir: string, depth: number): ReactNode[] {
@@ -288,6 +320,8 @@ export function FileExplorer({ cwd }: { cwd: string }): React.JSX.Element {
 							<button
 								type="button"
 								onClick={() => {
+									// Confirm before discarding an unsaved draft (M-22).
+									if (draft !== null && !confirmDockEditorClose()) return;
 									setFileContent(null);
 									setDraft(null);
 									setTruncated(false);
@@ -405,14 +439,22 @@ export function SessionTreePanel({
 					key={node.entry.id}
 					type="button"
 					onClick={() => setSelected(node.entry.id)}
-					className={`block w-full truncate rounded px-2 py-0.5 text-left text-[11px] hover:bg-app-surface2 ${
+					className={`flex w-full items-center gap-1 truncate rounded px-2 py-0.5 text-left text-[11px] hover:bg-app-surface2 ${
 						isSelected ? "bg-accent-soft text-on-accent-soft" : "text-neutral-300"
 					}`}
 					style={{ paddingLeft: `${depth * 12 + 8}px` }}
 					title={node.entry.id}
 				>
-					{node.children.length > 0 ? "⑂ " : "· "}
-					{nodePreview(node)}
+					{/* lucide only — the old branch/leaf text glyphs violated the
+					    icon convention (audit 6 L-14). */}
+					<span className="flex shrink-0 items-center text-neutral-500" aria-hidden="true">
+						{node.children.length > 0 ? (
+							<GitFork size={10} strokeWidth={2} />
+						) : (
+							<Dot size={10} strokeWidth={2} />
+						)}
+					</span>
+					<span className="truncate">{nodePreview(node)}</span>
 				</button>
 			);
 			out.push(...renderNodes(node.children, depth + 1));
@@ -599,9 +641,10 @@ export function CommandsBrowser({
 						<button
 							type="button"
 							onClick={() => setDetail(null)}
-							className="mb-2 rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-400 hover:bg-neutral-700"
+							className="mb-2 flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-400 hover:bg-neutral-700"
 						>
-							← back
+							<ArrowLeft size={11} strokeWidth={2} />
+							back
 						</button>
 						<h4 className="font-mono text-xs text-neutral-200">
 							/{detail.command.name}

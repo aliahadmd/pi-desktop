@@ -10,12 +10,16 @@ import {
 	createAgentSessionRuntime,
 	createAgentSessionServices,
 	getAgentDir,
+	hasTrustRequiringProjectResources,
 	ModelRuntime,
+	ProjectTrustStore,
 	SessionManager,
 	SettingsManager,
 	type AgentSession,
 	type AgentSessionEvent,
 	type AgentSessionRuntime,
+	type AgentSessionRuntimeDiagnostic,
+	type AgentSessionServices,
 	type CreateAgentSessionRuntimeFactory,
 	type ModelRuntime as PiModelRuntime,
 } from "@earendil-works/pi-coding-agent";
@@ -57,7 +61,6 @@ export class SdkPiBackend implements IPiBackend {
 		this.modelRuntime =
 			(this.options.modelRuntime as PiModelRuntime | undefined) ??
 			(await ModelRuntime.create());
-		const settingsManager = SettingsManager.create(cwd);
 		const sessionManager =
 			sessionPath !== undefined
 				? SessionManager.open(sessionPath)
@@ -87,6 +90,24 @@ export class SdkPiBackend implements IPiBackend {
 			sessionManager: sm,
 			sessionStartEvent,
 		}) => {
+			// Audit 6 C-1 + M-12: per-invocation settings manager at the runtime's
+			// cwd (a session switch must load the TARGET project's settings), with
+			// project trust resolved from the user's trust.json decisions —
+			// mirroring upstream's CLI bootstrap (main.ts resolveProjectTrusted).
+			// Projects with trust-requiring .pi resources and no recorded decision
+			// load UNTRUSTED (fail closed) until the user grants trust.
+			const trustStore = new ProjectTrustStore(agentDir);
+			const requiresTrust = hasTrustRequiringProjectResources(runtimeCwd);
+			const knownDecision = requiresTrust ? trustStore.get(runtimeCwd) : null;
+			const projectTrusted = requiresTrust ? knownDecision === true : true;
+			const settingsManager = SettingsManager.create(runtimeCwd, agentDir, {
+				projectTrusted,
+			});
+			// The renderer pre-flight (session.check_trust / grant_trust) covers
+			// initial creation; an in-place rebuild (switch) into an
+			// unknown-decision project can be prompted inline because the renderer
+			// already knows this session.
+			const canPromptInline = sessionStartEvent !== undefined;
 			// Inline extension factories are SDK-mode only: a function cannot cross the
 			// `pi --mode rpc` subprocess boundary. RPC sessions run without the gate.
 			const services = await createAgentSessionServices({
@@ -94,10 +115,26 @@ export class SdkPiBackend implements IPiBackend {
 				agentDir,
 				...(this.modelRuntime !== null ? { modelRuntime: this.modelRuntime } : {}),
 				settingsManager,
+				...(requiresTrust && knownDecision === null && canPromptInline
+					? {
+							resourceLoaderReloadOptions: {
+								resolveProjectTrust: async () => {
+									const trusted = await this.uiAdapter.confirmProjectTrust(runtimeCwd);
+									trustStore.set(runtimeCwd, trusted);
+									return trusted;
+								},
+							},
+						}
+					: {}),
 				...(extensionFactories.length > 0
 					? { resourceLoaderOptions: { extensionFactories } }
 					: {}),
 			});
+			// Audit 6 M-8: surface extension/settings diagnostics instead of
+			// dropping them — upstream's CLI factory reports these; the desktop
+			// returned `diagnostics: []` and a broken extension failed silently.
+			const diagnostics = collectStartupDiagnostics(services);
+			this.emitDiagnostics(diagnostics);
 			return {
 				...(await createAgentSessionFromServices({
 					services,
@@ -107,7 +144,7 @@ export class SdkPiBackend implements IPiBackend {
 					...(customTools.length > 0 ? { customTools } : {}),
 				})),
 				services,
-				diagnostics: [],
+				diagnostics,
 			};
 		};
 
@@ -143,6 +180,9 @@ export class SdkPiBackend implements IPiBackend {
 		});
 		this.runtime?.setRebindSession(async (nextSession: AgentSession) => {
 			this.session = nextSession;
+			// Stale dialogs belong to the torn-down session — answering them later
+			// would resolve a veto in a session that no longer runs.
+			this.uiAdapter.cancelAll();
 			await this.bindToSession(nextSession);
 		});
 	}
@@ -150,7 +190,15 @@ export class SdkPiBackend implements IPiBackend {
 	async dispose(): Promise<void> {
 		this.unsubscribe?.();
 		this.unsubscribe = null;
-		this.session?.dispose();
+		this.uiAdapter.cancelAll();
+		// Dispose through the runtime so extensions receive session_shutdown
+		// ("quit") and release their resources (audit 6 M-9); fall back to the
+		// bare session when start() never completed.
+		if (this.runtime !== null) {
+			await this.runtime.dispose().catch(() => {});
+		} else {
+			this.session?.dispose();
+		}
 		this.session = null;
 		this.runtime = null;
 	}
@@ -354,6 +402,11 @@ export class SdkPiBackend implements IPiBackend {
 
 	async fork(entryId: string): Promise<{ text?: string; cancelled: boolean }> {
 		const result = await this.requireSession().navigateTree(entryId, { summarize: false });
+		if (result.aborted === true) {
+			throw new Error("navigation aborted by extension");
+		}
+		// The active branch changed — re-hydrate like navigateTree does (audit 6 M-5).
+		void this.notifyReplaced().catch(() => {});
 		return result.editorText === undefined
 			? { cancelled: result.cancelled }
 			: { text: result.editorText, cancelled: result.cancelled };
@@ -440,6 +493,26 @@ export class SdkPiBackend implements IPiBackend {
 		this.uiAdapter.respond(response);
 	}
 
+	/**
+	 * Forward startup diagnostics as backend_warning events (audit 6 M-8).
+	 *
+	 * Deferred one macrotask: on initial creation the factory runs before
+	 * `session.create` resolves, and the renderer drops events for sessions it
+	 * does not know yet. The invoke response and these events travel the same
+	 * FIFO channel, so after the deferral the session registration always wins.
+	 */
+	private emitDiagnostics(diagnostics: AgentSessionRuntimeDiagnostic[]): void {
+		if (diagnostics.length === 0) return;
+		setTimeout(() => {
+			for (const diagnostic of diagnostics) {
+				this.options.onEvent({
+					type: "backend_warning",
+					reason: `[${diagnostic.type}] ${diagnostic.message}`,
+				});
+			}
+		}, 0);
+	}
+
 	private requireSession(): AgentSession {
 		if (this.session === null) throw new Error("SDK session not started");
 		return this.session;
@@ -449,6 +522,23 @@ export class SdkPiBackend implements IPiBackend {
 // ---------------------------------------------------------------------------
 // Event mapping (AgentSessionEvent → PiEvent)
 // ---------------------------------------------------------------------------
+
+/**
+ * Collect non-fatal setup issues (audit 6 M-8): services diagnostics plus
+ * extension load errors, which live on the resource loader, not in
+ * services.diagnostics. Exported for tests.
+ */
+export function collectStartupDiagnostics(
+	services: AgentSessionServices
+): AgentSessionRuntimeDiagnostic[] {
+	return [
+		...services.diagnostics,
+		...services.resourceLoader.getExtensions().errors.map((e) => ({
+			type: "error" as const,
+			message: `Extension failed to load: ${e.path}: ${e.error}`,
+		})),
+	];
+}
 
 export function mapSdkEventToPiEvent(event: AgentSessionEvent): PiEvent | null {
 	const mapped = mapSdkEventInner(event);

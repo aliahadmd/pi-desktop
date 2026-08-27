@@ -111,16 +111,36 @@ body,
 #root {
 	height: 100%;
 	margin: 0;
-	background: var(--pi-bg);
 	color: var(--pi-text);
 	font-family:
 		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
 }
 
+/* The base background lives on body ONLY (audit 6 C-2): painting it on html
+   and #root too kept those layers opaque, so the transparency override below
+   could never show the window's vibrancy through. */
+body {
+	background: var(--pi-bg);
+}
+
 /* Window transparency (phase 7, ch32): the base layer goes translucent so
-   macOS vibrancy shows through; panels stay solid for readability. */
+   macOS vibrancy shows through; panels stay solid for readability.
+   --bg-alpha is written HERE (audit 6 C-2 — it previously had no writer, so
+   the color-mix below always computed a fully opaque color). */
+html[data-transparency="on"] {
+	--bg-alpha: 0.7;
+}
 html[data-transparency="on"] body {
 	background: color-mix(in srgb, var(--pi-bg) calc(var(--bg-alpha) * 100%), transparent);
+}
+
+/* Native widgets (checkboxes, radio, scrollbars) follow the preset's dark/
+   light branch — consumes the data-theme-dark attribute applyTheme writes. */
+html[data-theme-dark="true"] {
+	color-scheme: dark;
+}
+html[data-theme-dark="false"] {
+	color-scheme: light;
 }
 
 /* ---- Motion tokens (phase 3, ch14) ---- */
@@ -218,12 +238,15 @@ html[data-transparency="on"] body {
 		color: var(--pi-accent);
 	}
 }
+/* Skeleton shimmer: tinted by the theme's TEXT token at low alpha (audit 6
+   L-14) — the old hardcoded white-on-white gradient was invisible against
+   light-preset surfaces. */
 .skeleton {
 	background: linear-gradient(
 		90deg,
-		rgba(255, 255, 255, 0.04) 25%,
-		rgba(255, 255, 255, 0.08) 50%,
-		rgba(255, 255, 255, 0.04) 75%
+		color-mix(in srgb, var(--pi-text) 5%, transparent) 25%,
+		color-mix(in srgb, var(--pi-text) 11%, transparent) 50%,
+		color-mix(in srgb, var(--pi-text) 5%, transparent) 75%
 	);
 	background-size: 200% 100%;
 	animation: skeleton-shimmer 1.4s infinite;

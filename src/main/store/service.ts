@@ -62,7 +62,10 @@ export class StoreService {
 		this.db = null;
 	}
 
+	private piService: PiService | null = null;
+
 	attachPiService(piService: PiService): void {
+		this.piService = piService;
 		piService.addHooks({
 			onSessionOpened: (info) => this.handleSessionOpened(info),
 			onSessionClosed: (appSessionId) => {
@@ -85,10 +88,24 @@ export class StoreService {
 			return { sessions: rows.map(toIndexed) };
 		});
 		router.handle("session.delete_file", async (req) => {
+			// Audit 6 H-5: this is the only fs-mutating channel without root
+			// containment, so require the target to be a session file the indexer
+			// actually knows about. Audit 5 H-3: deleting the file under a running
+			// session leaves a zombie tab — refuse while it is open.
+			const row = this.sessions?.getByFilePath(req.sessionPath);
+			if (row === undefined || row === null) {
+				throw new Error("not an indexed session file — refusing to delete");
+			}
+			if (this.piService?.isSessionFileOpen(req.sessionPath) === true) {
+				throw new Error("session is currently open — close the tab before deleting it");
+			}
 			if (existsSync(req.sessionPath)) {
 				await shell.trashItem(req.sessionPath);
 			}
-			this.guard(() => this.sessions?.removeByFilePath(req.sessionPath));
+			// Audit 6 L-1: explicit user writes must not be guard()-swallowed — a
+			// failed row removal after a successful trash used to resolve ok:true,
+			// leaving a dead row that pointed at a trashed file.
+			this.sessions?.removeByFilePath(req.sessionPath);
 			return null;
 		});
 		router.handle("db.usage.daily", (req) => {
@@ -117,6 +134,10 @@ export class StoreService {
 					path: p.path,
 					name: p.name,
 					pinned: p.pinned_at != null,
+					// Real pin timestamp (audit 6 L-14): the sidebar sorts pinned
+					// projects by pin time; it used to fabricate pinnedAt: 0 for every
+					// project, making the pinned-sort order arbitrary.
+					pinnedAt: p.pinned_at,
 					sessionCount: p.session_count,
 					lastOpenedAt: p.last_opened_at,
 				})),
@@ -147,10 +168,12 @@ export class StoreService {
 			return toJson(value);
 		});
 		router.handle("app.settings.set", (req) => {
-			this.guard(() => {
-				const parsed: unknown = JSON.parse(req.value);
-				this.settings?.set(req.key, parsed);
-			});
+			// Audit 6 L-1: an explicit user write must fail loudly — guard() used
+			// to swallow JSON/DB errors here, resolving ok:true while nothing was
+			// persisted (the renderer then showed "Saved." on a lie).
+			const parsed: unknown = JSON.parse(req.value);
+			if (this.settings === null) throw new Error("store not ready");
+			this.settings.set(req.key, parsed);
 			return null;
 		});
 	}
@@ -164,7 +187,13 @@ export class StoreService {
 	}
 
 	setSettingRaw(key: string, value: unknown): void {
-		this.guard(() => this.settings?.set(key, value));
+		// Audit 6 L-1: this backs explicit user writes (API keys, scoped models,
+		// permission default). Letting a failure through as ok:true made the UI
+		// report success for a write that never happened — throw instead. (The
+		// event-driven paths below keep using guard(): persistence problems must
+		// never break a running agent session.)
+		if (this.settings === null) throw new Error("store not ready");
+		this.settings.set(key, value);
 	}
 
 	getWindowState<T>(fallback: T): T {
@@ -290,8 +319,7 @@ export class StoreService {
 				modelProvider: model?.modelProvider ?? null,
 				modelId: model?.modelId ?? null,
 			};
-			this.usage?.insert(insert);
-			this.usage?.addToSessionRollup(piSessionId, insert);
+			this.usage?.insertWithRollup(insert);
 		});
 	}
 

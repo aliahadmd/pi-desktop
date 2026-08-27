@@ -32,6 +32,13 @@ export interface SidecarOptions {
 
 const MAX_RESTARTS = 3;
 
+/**
+ * After the fast restart budget is spent, keep trying on a slow cadence so a
+ * transient cause (venv rebuild, resource pressure) self-heals without an app
+ * relaunch (audit 6 L-9). Status stays "degraded" until a retry succeeds.
+ */
+const RECOVERY_RETRY_MS = 5 * 60_000;
+
 /** electron import can be unavailable in unit tests. */
 function isPackagedSafe(): boolean {
 	try {
@@ -61,6 +68,7 @@ export class SidecarManager {
 	private status: SidecarStatus = "stopped";
 	private restarts = 0;
 	private healthTimer: NodeJS.Timeout | null = null;
+	private restartTimer: NodeJS.Timeout | null = null;
 	private stderrTail: string[] = [];
 	private stoppedByUs = false;
 
@@ -117,6 +125,10 @@ export class SidecarManager {
 
 	async stop(): Promise<void> {
 		this.stoppedByUs = true;
+		// A pending restart would otherwise fire mid-exit and spawn a fresh
+		// sidecar during before-quit (audit 6 L-9).
+		if (this.restartTimer !== null) clearTimeout(this.restartTimer);
+		this.restartTimer = null;
 		if (this.healthTimer !== null) clearInterval(this.healthTimer);
 		this.healthTimer = null;
 		const child = this.proc;
@@ -241,12 +253,29 @@ export class SidecarManager {
 		if (this.restarts >= MAX_RESTARTS) {
 			this.log("error", `sidecar gave up after ${MAX_RESTARTS} restarts; last: ${reason}`);
 			this.setStatus("degraded");
+			// Degraded is not terminal: schedule a slow recovery retry and reset
+			// the budget so the next episode gets the full fast backoff again.
+			this.restarts = 0;
+			this.armRestart(RECOVERY_RETRY_MS);
 			return;
 		}
 		this.restarts += 1;
 		const delay = Math.min(30_000, 1_000 * 2 ** this.restarts);
 		this.log("warn", `sidecar died (${reason}); restarting in ${delay}ms`);
-		setTimeout(() => void this.start(), delay);
+		this.armRestart(delay);
+	}
+
+	/**
+	 * The timer handle is kept (and unref'd) so stop() can cancel a pending
+	 * restart and a queued retry never keeps the app alive during quit.
+	 */
+	private armRestart(delay: number): void {
+		if (this.restartTimer !== null) clearTimeout(this.restartTimer);
+		this.restartTimer = setTimeout(() => {
+			this.restartTimer = null;
+			void this.start();
+		}, delay);
+		this.restartTimer.unref?.();
 	}
 
 	private setStatus(status: SidecarStatus): void {

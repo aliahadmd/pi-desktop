@@ -39,10 +39,13 @@ export function ProjectRow({
 				</span>
 				<span className="truncate text-[11px] font-medium text-neutral-400">{name}</span>
 			</button>
-			<span className="ml-1 shrink-0 font-mono text-[9px] text-neutral-700 group-hover:hidden">
+			<span className="ml-1 shrink-0 font-mono text-[9px] text-neutral-700 group-hover:hidden group-focus-within:hidden">
 				{count}
 			</span>
-			<div className="ml-auto hidden shrink-0 items-center gap-0.5 group-hover:flex">
+			{/* group-focus-within mirrors group-hover (audit 6 L-14): the row's
+			    toggle button is always focusable, so keyboard users reveal the
+			    actions by tabbing into the row — hover-only was unreachable. */}
+			<div className="ml-auto hidden shrink-0 items-center gap-0.5 group-hover:flex group-focus-within:flex">
 				<button
 					type="button"
 					title={`New session in ${name}`}

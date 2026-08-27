@@ -4,7 +4,8 @@
  */
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { bindPiEvents, useSessions } from "./stores/pi-sessions";
+import { bindPiEvents, rehydrateOpenSessions, useSessions } from "./stores/pi-sessions";
+import { confirmDockEditorClose } from "./stores/dock-dirty";
 import ChatPage, { refreshState, type DockTab } from "./pages/ChatPage";
 import { applyTheme } from "./lib/apply-theme";
 import { ThemeContext } from "./lib/theme-context";
@@ -23,6 +24,7 @@ import { TopBar } from "./components/shell/TopBar";
 import { PackageMarketplace } from "./pages/PackageMarketplace";
 import { Sheet } from "./components/shell/Sheet";
 import { Sidebar } from "./components/shell/Sidebar";
+import { TrustPrompt } from "./components/shell/TrustPrompt";
 
 type SheetKind = "models" | "settings" | "trust" | "browse" | "packages" | null;
 
@@ -30,6 +32,8 @@ export default function App(): React.JSX.Element {
 
 	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [onboardingChecked, setOnboardingChecked] = useState(false);
+	/** Provider-detection failure surfaced inside onboarding (audit 6 M-26). */
+	const [onboardingError, setOnboardingError] = useState<string | null>(null);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const [dockTab, setDockTab] = useState<DockTab>(null);
 	const [compactOpen, setCompactOpen] = useState(false);
@@ -72,6 +76,14 @@ export default function App(): React.JSX.Element {
 	}
 
 	useEffect(() => bindPiEvents(), []);
+
+	// Audit 6 H-1: after a window reopen/reload, adopt sessions still running in
+	// the main process. Bound after bindPiEvents so events land once the store
+	// knows the sessions. Safe under StrictMode double-mount: the second call
+	// finds the first call's sessions already in the store and skips them.
+	useEffect(() => {
+		void rehydrateOpenSessions();
+	}, []);
 
 	// Theme: read persisted preset once and apply before first interaction.
 	// Exposed setter lets Settings + the top-bar cycler switch live.
@@ -168,11 +180,29 @@ export default function App(): React.JSX.Element {
 			const skipped = dismissed.ok && dismissed.data === true;
 			const r = await window.piDesktop.invoke({ type: "auth.providers" });
 			setOnboardingChecked(true);
-			if (!r.ok) return;
-			const anyConfigured = (
-				r.data as { providers: Array<{ configured: boolean }> }
-			).providers.some((p) => p.configured);
-			if (!anyConfigured && !skipped) setShowOnboarding(true);
+			if (!r.ok) {
+				// Detection itself failed — surface that instead of pretending the
+				// app is simply unconfigured (audit 6 M-26).
+				if (!skipped) {
+					setOnboardingError(r.error.message);
+					setShowOnboarding(true);
+				}
+				return;
+			}
+			const providers = r.data.providers;
+			const anyConfigured = providers.some((p) => p.configured);
+			if (!anyConfigured && !skipped) {
+				// "Every provider check errored" (keychain locked, etc.) is not
+				// "nothing configured" — the user may have valid keys we cannot
+				// see. Say so instead of silently showing the welcome modal.
+				const errors = providers
+					.map((p) => p.error)
+					.filter((e): e is string => e !== undefined);
+				if (providers.length > 0 && errors.length === providers.length) {
+					setOnboardingError(errors[0] ?? "provider detection failed");
+				}
+				setShowOnboarding(true);
+			}
 		})();
 	}, []);
 
@@ -209,7 +239,16 @@ export default function App(): React.JSX.Element {
 				activeSessionId={activeSessionId}
 				dockTab={dockTab}
 				reviewCount={reviewCount}
-				onDockToggle={(tab) => setDockTab(dockTab === tab ? null : tab)}
+				uiScale={uiScale}
+				onDockToggle={(tab) => {
+					// Closing the dock unmounts the file editor; confirm first when
+					// it holds an unsaved draft (audit 6 M-22).
+					if (dockTab === tab) {
+						if (confirmDockEditorClose()) setDockTab(null);
+					} else {
+						setDockTab(tab);
+					}
+				}}
 				onCompact={() => {
 					if (activeSessionId !== null) setCompactOpen(true);
 				}}
@@ -254,6 +293,7 @@ export default function App(): React.JSX.Element {
 				<AnimatePresence>
 					{showOnboarding && onboardingChecked && (
 						<Onboarding
+							{...(onboardingError !== null ? { detectionError: onboardingError } : {})}
 							onDone={() => {
 								setShowOnboarding(false);
 							}}
@@ -406,6 +446,10 @@ export default function App(): React.JSX.Element {
 					</div>
 				</div>
 			)}
+
+			{/* Project-trust prompt (audit 6 C-1) — shown before opening a session
+			    in a project with untrusted .pi resources. */}
+			<TrustPrompt />
 			</div>
 		</div>
 		</ThemeContext.Provider>
